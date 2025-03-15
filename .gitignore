@@ -23,6 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
-config/serviceAccountKey.json
+server/config/serviceAccountKey.json
 node_modules/
 .env
