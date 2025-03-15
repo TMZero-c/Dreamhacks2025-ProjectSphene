@@ -1,9 +1,17 @@
-// /config/openaiConfig.js
-require('dotenv').config('.env');  // To load environment variables from the .env file
-const { OpenAI } = require('openai');  // Import OpenAI SDK
+// OpenAI configuration
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+const { OpenAI } = require('openai');
+
+const apiKey = process.env.OPENAI_API_KEY;
+console.log(`OpenAI API Key ${apiKey ? 'is set' : 'is NOT set'}`);
+
+if (!apiKey) {
+  console.warn('WARNING: OPENAI_API_KEY environment variable is not set');
+}
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,  // Use your environment variable for the API key
+  apiKey: apiKey,
 });
 
 module.exports = openai;

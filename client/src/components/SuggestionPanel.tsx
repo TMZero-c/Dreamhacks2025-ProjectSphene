@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { fetchSuggestions, respondToSuggestion } from '../services/api';
+import React, { useState, useEffect, useRef } from 'react';
+import { fetchSuggestions, respondToSuggestion, triggerDocumentComparison } from '../services/api';
 import SuggestionItem from './SuggestionItem';
 import { Suggestion } from '../types/types';
 import './SuggestionPanel.css';
@@ -15,16 +15,55 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
     quillRef,
     visible
 }) => {
+    console.log(`SuggestionPanel rendering for noteId: ${noteId}`);
+
     const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [generating, setGenerating] = useState(false);
+    const hasFetched = useRef(false);
+    const hasTriggeredGeneration = useRef(false);
 
     // Fetch suggestions when the panel becomes visible or noteId changes
     useEffect(() => {
         if (visible && noteId) {
-            loadSuggestions();
+            // Reset our reference flags when note changes
+            if (hasFetched.current && hasTriggeredGeneration.current) {
+                hasFetched.current = false;
+                hasTriggeredGeneration.current = false;
+            }
+
+            if (!hasFetched.current) {
+                (async () => {
+                    hasFetched.current = true;
+                    console.log(`Fetching suggestions for note ID: ${noteId}`);
+                    setLoading(true);
+                    try {
+                        const fetchedSuggestions = await fetchSuggestions(noteId);
+                        console.log(`Fetched ${fetchedSuggestions.length} suggestions:`, fetchedSuggestions);
+                        setSuggestions(fetchedSuggestions);
+
+                        // If no suggestions found and we haven't triggered generation yet, do it automatically
+                        if (fetchedSuggestions.length === 0 && !hasTriggeredGeneration.current) {
+                            console.log("No suggestions found, automatically triggering generation");
+                            handleGenerateSuggestions();
+                        }
+                    } catch (error) {
+                        console.error('Error loading suggestions:', error);
+                        setError('Failed to load suggestions');
+                    } finally {
+                        setLoading(false);
+                    }
+                })();
+            }
         }
     }, [visible, noteId]);
+
+    // Reset guard when noteId changes so new suggestions can be fetched
+    useEffect(() => {
+        hasFetched.current = false;
+        hasTriggeredGeneration.current = false;
+    }, [noteId]);
 
     const loadSuggestions = async () => {
         if (!noteId) return;
@@ -40,6 +79,28 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
             setError('Failed to load suggestions. Please try again.');
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Generate new suggestions using AI
+    const handleGenerateSuggestions = async () => {
+        if (!noteId || generating) return;
+
+        hasTriggeredGeneration.current = true;
+        setGenerating(true);
+        setError(null);
+
+        try {
+            console.log(`Triggering document comparison for note ${noteId}`);
+            await triggerDocumentComparison(noteId);
+
+            // Reload suggestions after comparison is done
+            await loadSuggestions();
+        } catch (err) {
+            console.error('Failed to generate suggestions:', err);
+            setError('Failed to generate suggestions. Please try again.');
+        } finally {
+            setGenerating(false);
         }
     };
 
@@ -91,19 +152,32 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
         setSuggestions(suggestions.filter(s => s.id !== suggestionId));
     };
 
+    if (suggestions.length === 0 && !loading && !error) {
+        console.log("No suggestions found for this note");
+    }
+
     if (!visible) return null;
 
     return (
         <div className="suggestion-panel">
             <div className="panel-header">
                 <h2 className="panel-title">Content Suggestions</h2>
-                <button
-                    onClick={loadSuggestions}
-                    disabled={loading}
-                    className="refresh-button"
-                >
-                    {loading ? 'Loading...' : 'Refresh'}
-                </button>
+                <div className="panel-actions">
+                    <button
+                        onClick={handleGenerateSuggestions}
+                        disabled={loading || generating}
+                        className="generate-button"
+                    >
+                        {generating ? 'Generating...' : 'Generate Suggestions'}
+                    </button>
+                    <button
+                        onClick={loadSuggestions}
+                        disabled={loading || generating}
+                        className="refresh-button"
+                    >
+                        {loading ? 'Loading...' : 'Refresh'}
+                    </button>
+                </div>
             </div>
 
             {error && (
@@ -112,17 +186,17 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
                 </div>
             )}
 
-            {loading && (
+            {(loading || generating) && (
                 <div className="loading-message">
-                    Loading suggestions...
+                    {loading ? 'Loading suggestions...' : 'Generating suggestions...'}
                 </div>
             )}
 
-            {!loading && suggestions.length === 0 && (
+            {!loading && !generating && suggestions.length === 0 && (
                 <div className="empty-state">
                     <p>No suggestions available</p>
                     <p className="empty-state-hint">
-                        Suggestions will appear as collaborators add content
+                        Click "Generate Suggestions" to create AI-powered content suggestions
                     </p>
                 </div>
             )}

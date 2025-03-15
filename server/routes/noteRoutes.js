@@ -2,6 +2,12 @@ const express = require('express');
 const router = express.Router();
 const noteController = require('../controllers/noteController');
 
+// Logging middleware
+router.use((req, res, next) => {
+    console.log(`[noteRoutes] ${req.method} ${req.originalUrl}`);
+    next();
+});
+
 // Get all notes for a user
 router.get('/user/:userId', noteController.getNotes);
 

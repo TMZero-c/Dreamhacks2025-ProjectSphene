@@ -53,6 +53,7 @@ exports.respondToSuggestion = async (req, res) => {
 
 // Trigger a comparison between documents and generate suggestions
 exports.compareDocuments = async (req, res) => {
+    console.log('[suggestionController] compareDocuments called with body:', req.body);
     try {
         const { noteId } = req.body;
 

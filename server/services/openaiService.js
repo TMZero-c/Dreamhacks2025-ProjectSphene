@@ -8,15 +8,21 @@ const openai = require('../config/openaiConfig');
  * @returns {Array} An array of suggestion objects
  */
 exports.generateSuggestions = async (targetNote, otherNotes) => {
+    console.log(`Generating suggestions for note ID: ${targetNote.id || targetNote._id}`);
+    console.log(`Comparing with ${otherNotes.length} other notes`);
+
     const suggestions = [];
 
     // Process each note for comparison
     for (const sourceNote of otherNotes) {
         try {
+            console.log(`Comparing with note from user: ${sourceNote.userId}`);
+
             // Create a prompt for OpenAI to compare documents
             const prompt = createComparisonPrompt(targetNote.content, sourceNote.content);
 
             // Call OpenAI API with the prompt
+            console.log('Calling OpenAI API with prompt:', prompt);
             const response = await openai.chat.completions.create({
                 model: "gpt-4",
                 messages: [
@@ -29,16 +35,26 @@ exports.generateSuggestions = async (targetNote, otherNotes) => {
                     { role: "user", content: prompt }
                 ],
                 temperature: 0.7,
-                max_tokens: 1000
+                max_tokens: 1500 // allows full JSON response
             });
 
+            console.log('OpenAI response:', response);
+
+            const messageContent = response.choices && response.choices[0] && response.choices[0].message && response.choices[0].message.content;
+            if (!messageContent) {
+                console.warn('No message content received from OpenAI');
+                continue;
+            }
+
             // Parse the response and create suggestion objects
+            const noteId = targetNote.id || targetNote._id.toString();
             const suggestionsFromResponse = parseSuggestionsFromResponse(
-                response.choices[0].message.content,
-                targetNote._id,
+                messageContent,
+                noteId,
                 sourceNote.userId
             );
 
+            console.log(`Generated ${suggestionsFromResponse.length} suggestions from this comparison`);
             suggestions.push(...suggestionsFromResponse);
 
         } catch (error) {
@@ -47,6 +63,7 @@ exports.generateSuggestions = async (targetNote, otherNotes) => {
         }
     }
 
+    console.log(`Total suggestions generated: ${suggestions.length}`);
     return suggestions;
 };
 
@@ -124,16 +141,23 @@ function extractTextFromQuillDelta(delta) {
  */
 function parseSuggestionsFromResponse(responseContent, noteId, sourceUserId) {
     try {
+        console.log('Parsing response for suggestions');
+        console.log('Note ID for suggestions:', noteId);
+
         // Extract JSON from the response
         const jsonMatch = responseContent.match(/\[[\s\S]*\]/);
-        if (!jsonMatch) return [];
+        if (!jsonMatch) {
+            console.log('No JSON array found in response');
+            return [];
+        }
 
         const suggestionsData = JSON.parse(jsonMatch[0]);
+        console.log(`Found ${suggestionsData.length} suggestions in response`);
 
         // Map the parsed data to suggestion objects
         return suggestionsData.map(suggestion => ({
             title: suggestion.title,
-            type: suggestion.type,
+            type: suggestion.type || 'missing_content', // Default type if missing
             content: suggestion.content,
             noteId: noteId.toString(), // Convert to string to ensure compatibility
             source: `User ${sourceUserId}`,
