@@ -25,14 +25,22 @@ export interface Lecture {
     updatedAt: Date;
 }
 
+export interface InsertionPoint {
+    contentMarker: string;
+    position: 'before' | 'after';
+}
+
 // Interface for AI-generated suggestions
 export interface Suggestion {
-    id: string;
+    id?: string;
     _id?: string; // Add the _id field here
     title: string;
     content: any; // Quill Delta object
     noteId: string;
     type: 'missing_content' | 'clarification' | 'structure' | 'key_point';
     source?: string; // Could indicate which user's document this came from
+    status: 'pending' | 'accepted' | 'dismissed';
     createdAt?: Date;
+    updatedAt?: Date;
+    insertionPoint?: InsertionPoint | null;
 }

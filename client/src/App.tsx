@@ -222,6 +222,15 @@ function App() {
   // Toggle suggestion panel visibility
   const toggleSuggestions = () => {
     setShowSuggestions(!showSuggestions);
+    // When showing suggestions on mobile, ensure focus is on the suggestions section
+    if (!showSuggestions && window.innerWidth <= 991) {
+      setTimeout(() => {
+        const suggestionsSection = document.querySelector('.suggestions-section');
+        if (suggestionsSection) {
+          suggestionsSection.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
+    }
   };
 
   // Handle user ID change (for testing)
@@ -295,8 +304,8 @@ function App() {
       </div>
 
       <div className="main-content">
-        {/* Sidebar with lecture selector */}
-        <div className="sidebar">
+        {/* Sidebar with lecture selector - only show when suggestions are hidden */}
+        <div className={`sidebar ${showSuggestions ? 'hide-sidebar' : ''}`}>
           <LectureSelector
             userId={userId}
             selectedLecture={selectedLecture}
@@ -321,7 +330,7 @@ function App() {
           )}
         </div>
 
-        {/* Side panel for suggestions */}
+        {/* Side panel for suggestions - only show when enabled */}
         {showSuggestions && selectedLecture && (
           <div className="suggestions-section">
             <SuggestionPanel

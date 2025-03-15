@@ -2,7 +2,17 @@
 .suggestion-item {
     border: 1px solid rgba(122, 139, 143, 0.2);
     border-radius: 8px;
-    overflow: hidden;
+    overflow: auto;
+    min-height: 70px;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 8px;
+    transition: all 0.3s ease;
+}
+
+.suggestion-item.removing {
+    opacity: 0;
+    transform: translateX(30px);
 }
 
 .suggestion-item.expanded {
@@ -78,6 +88,9 @@
     padding: 16px;
     border-top: 1px solid rgba(122, 139, 143, 0.2);
     background-color: white;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 @media (min-width: 768px) {
@@ -109,6 +122,10 @@
     border-radius: 4px;
     font-size: 0.813rem;
     line-height: 1.4;
+    max-height: 400px;
+    min-height: 50px;
+    overflow-y: auto;
+    word-break: break-word;
 }
 
 @media (min-width: 768px) {
@@ -117,6 +134,24 @@
         padding: 16px 20px;
         font-size: 0.875rem;
     }
+}
+
+.preview-text {
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary) var(--background);
+}
+
+.preview-text::-webkit-scrollbar {
+    width: 4px;
+}
+
+.preview-text::-webkit-scrollbar-track {
+    background: var(--background);
+}
+
+.preview-text::-webkit-scrollbar-thumb {
+    background-color: var(--primary);
+    border-radius: 2px;
 }
 
 .suggestion-actions {
@@ -168,4 +203,24 @@
 
 .apply-button:hover {
     background-color: #68b9a1;
+}
+
+.insertion-point-info {
+    background-color: #f5f5f5;
+    border-radius: 4px;
+    padding: 6px 10px;
+    margin: 6px 0;
+    font-size: 0.85rem;
+    border-left: 3px solid #4a86e8;
+}
+
+.insertion-label {
+    font-weight: 600;
+    margin-right: 4px;
+    color: #555;
+}
+
+.content-marker {
+    font-style: italic;
+    color: #333;
 }

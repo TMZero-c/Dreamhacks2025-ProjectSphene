@@ -114,6 +114,7 @@ const TextEditor = forwardRef<any, TextEditorProps>((props, ref) => {
                             <button
                                 onClick={onToggleSuggestions}
                                 className={`toggle-button ${showSuggestions ? 'active' : 'inactive'}`}
+                                aria-label={showSuggestions ? 'Hide suggestions' : 'Show suggestions'}
                             >
                                 {showSuggestions ? 'Hide Suggestions' : 'Show Suggestions'}
                             </button>

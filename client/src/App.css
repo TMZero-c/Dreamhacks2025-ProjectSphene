@@ -41,6 +41,8 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  max-height: 100vh;
+  overflow: auto;
 }
 
 .main-content {
@@ -49,12 +51,35 @@ body {
   overflow: hidden;
 }
 
+/* Modify sidebar for responsive hiding */
 .sidebar {
-  width: 300px;
+  width: 400px;
   padding: 20px;
   background-color: #f8f9fa;
   overflow-y: auto;
   border-right: 1px solid #e0e0e0;
+  transition: all 0.3s ease;
+  display: flex;
+  /* Add flex display */
+  flex-direction: column;
+}
+
+/* Hide sidebar when suggestions are shown */
+.sidebar.hide-sidebar {
+  display: none;
+}
+
+/* Responsive adjustments for sidebar */
+@media (max-width: 991px) {
+
+  /* When suggestions are shown, hide sidebar completely */
+  .sidebar.hide-sidebar {
+    display: none;
+  }
+
+  .main-content:has(.suggestions-section) .sidebar {
+    display: none;
+  }
 }
 
 .editor-section {
@@ -67,10 +92,15 @@ body {
   border-right: 1px solid #e0e0e0;
 }
 
+/* Improve suggestions section for better scrolling */
 .suggestions-section {
   width: 300px;
+  height: 100%;
   overflow-y: auto;
   background-color: #f8f9fa;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
 }
 
 .loading-placeholder {
@@ -97,7 +127,7 @@ body {
 
   .sidebar {
     width: 100%;
-    max-height: 200px;
+    max-height: none;
     border-right: none;
     border-bottom: 1px solid #e0e0e0;
   }
@@ -109,6 +139,7 @@ body {
   .suggestions-section {
     width: 100%;
     border-top: 1px solid #e0e0e0;
+    max-height: none;
   }
 }
 

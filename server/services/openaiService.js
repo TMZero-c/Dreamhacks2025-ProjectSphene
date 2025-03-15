@@ -193,11 +193,19 @@ ${JSON.stringify(deltaB, null, 2)}
 ${styleGuidance}
 
 Identify key points, concepts, or information present in Document B but missing from Document A.
+For each missing element:
+
+1. ANALYZE WHERE in Document A the suggestion should be inserted for maximum relevance and coherence
+2. Find a specific paragraph, section, or content in Document A that relates to your suggestion
+3. Identify TEXT MARKERS - exact phrases (5-10 words) from Document A that indicate where your suggestion belongs
 
 For each missing element, generate:
 1. A brief title describing the missing information
 2. The type of suggestion (choose from: missing_content, clarification, structure, key_point)
 3. Content formatted as a proper Quill Delta JSON object with basic formatting
+4. Insertion point recommendation with:
+   - A relevant content marker (exact text snippet from Document A)
+   - Position relative to marker (before/after)
 
 The Quill Delta object should:
 - Follow Document A's writing style, tone, and terminology
@@ -215,10 +223,15 @@ Format your response as JSON with the following structure:
       "ops": [
         {"insert": "The missing content with appropriate formatting.\\n"}
       ]
+    },
+    "insertionPoint": {
+      "contentMarker": "exact text from Document A that precedes or follows insertion",
+      "position": "after" // or "before"
     }
   }
 ]
 
+If no good insertion point can be found, omit the insertionPoint property.
 If you don't find any significant missing information, return an empty array: []`;
 }
 
@@ -357,10 +370,14 @@ function parseSuggestionsFromResponse(responseContent, noteId, sourceUserId) {
             // Ensure content has proper Quill Delta structure
             const validContent = validateQuillDelta(suggestion.content);
 
+            // Include the insertionPoint if present
+            const insertionPoint = suggestion.insertionPoint || null;
+
             return {
                 title: suggestion.title,
                 type: suggestion.type || 'missing_content', // Default type if missing
                 content: validContent,
+                insertionPoint: insertionPoint,
                 noteId: noteId.toString(), // Convert to string to ensure compatibility
                 source: `User ${sourceUserId}`,
                 status: 'pending'
@@ -371,7 +388,8 @@ function parseSuggestionsFromResponse(responseContent, noteId, sourceUserId) {
             totalSuggestions: validatedSuggestions.length,
             validSuggestions: validatedSuggestions.map(s => ({
                 title: s.title,
-                type: s.type
+                type: s.type,
+                hasInsertionPoint: !!s.insertionPoint
             }))
         });
 

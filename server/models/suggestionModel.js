@@ -19,6 +19,10 @@ const suggestionSchema = new mongoose.Schema({
         enum: ['missing_content', 'clarification', 'structure', 'key_point'],
         required: true
     },
+    insertionPoint: {
+        type: mongoose.Schema.Types.Mixed, // Store insertion point information
+        default: null
+    },
     source: {
         type: String
     },

@@ -35,6 +35,15 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
     // Keep track of active operations to prevent race conditions
     const activeOperation = useRef<string | null>(null);
 
+    // Track modifications to document for better insertion point calculation
+    const documentModifications = useRef<{
+        appliedSuggestions: string[];
+        originalText: string | null;
+    }>({
+        appliedSuggestions: [],
+        originalText: null
+    });
+
     // Only clear errors when explicitly dismissed by user
     const clearError = () => {
         setError(null);
@@ -83,6 +92,10 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
     useEffect(() => {
         hasFetched.current = false;
         hasTriggeredGeneration.current = false;
+        documentModifications.current = {
+            appliedSuggestions: [],
+            originalText: null
+        };
     }, [noteId, lectureId, userId]);
 
     // Debounced function to fetch suggestions
@@ -177,55 +190,199 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
         }
     };
 
-    // Apply a suggestion to the editor using Quill Delta
+    // Improved suggestion application with better insertion point handling
     const handleApplySuggestion = async (suggestion: Suggestion) => {
         if (!quillRef.current || !quillRef.current.getEditor) return;
 
         try {
             const editor = quillRef.current.getEditor();
+            const currentText = editor.getText();
 
-            // Get the current selection range or default to end of document
-            const range = editor.getSelection() || { index: editor.getLength() - 1, length: 0 };
-
-            // Insert a newline first if not at the beginning of the document
-            if (range.index > 0) {
-                editor.insertText(range.index, '\n\n');
-                range.index += 2;
+            // First time? Store original text for reference
+            if (!documentModifications.current.originalText) {
+                documentModifications.current.originalText = currentText;
             }
 
-            // Ensure the suggestion content is a valid Quill Delta
+            // Track that we're applying this suggestion
+            if (suggestion._id) {
+                documentModifications.current.appliedSuggestions.push(suggestion._id);
+            }
+
+            // Default insertion point (end of document)
+            let insertionIndex = editor.getLength() - 1;
+
+            // Try to find the insertion point if one is specified
+            if (suggestion.insertionPoint && suggestion.insertionPoint.contentMarker) {
+                const { contentMarker, position } = suggestion.insertionPoint;
+                insertionIndex = findBestInsertionPoint(editor, contentMarker, position);
+            }
+
+            // Get the current selection range or use our calculated insertion index
+            const range = editor.getSelection() || { index: insertionIndex, length: 0 };
+
+            // Insert newlines for spacing if needed
+            const needsNewlineBefore = range.index > 0 &&
+                currentText.charAt(range.index - 1) !== '\n';
+
+            const needsNewlineAfter = range.index < currentText.length &&
+                currentText.charAt(range.index) !== '\n';
+
+            let insertionOffset = 0;
+            if (needsNewlineBefore) {
+                editor.insertText(range.index, '\n');
+                insertionOffset++;
+            }
+
+            // Additional newline for separation
+            editor.insertText(range.index + insertionOffset, '\n');
+            insertionOffset++;
+
+            // Ensure the suggestion content is valid
             if (!suggestion.content || !suggestion.content.ops || !Array.isArray(suggestion.content.ops)) {
                 console.error('Invalid suggestion content format:', suggestion.content);
                 setError('This suggestion has invalid formatting and cannot be applied.');
                 return;
             }
 
-            // Insert the suggestion content at the cursor position or end
+            // Insert the content
             editor.updateContents({
                 ops: [
-                    { retain: range.index },
+                    { retain: range.index + insertionOffset },
                     ...suggestion.content.ops
                 ]
             });
 
-            // Scroll to the inserted content
-            editor.setSelection(range.index + 1, 0);
+            // Add trailing newline if needed
+            if (needsNewlineAfter) {
+                const contentLength = calculateDeltaLength(suggestion.content);
+                editor.insertText(range.index + insertionOffset + contentLength, '\n');
+            }
 
-            // Update the TextEditor component's internal state
+            // Scroll to the inserted content
+            editor.setSelection(range.index + insertionOffset, 0);
+
+            // Update TextEditor state
             if (quillRef.current.updateState) {
                 quillRef.current.updateState();
             }
 
-            // Mark the suggestion as accepted in the backend
+            // Mark suggestion as accepted in backend
             if (!suggestion._id) return;
             await respondToSuggestion(suggestion._id, 'accept');
 
-            // Remove the suggestion from the list using functional state update
-            setSuggestions(prevSuggestions => prevSuggestions.filter(s => s._id !== suggestion._id));
+            // Remove from UI list
+            setSuggestions(prevSuggestions =>
+                prevSuggestions.filter(s => s._id !== suggestion._id)
+            );
+
         } catch (error) {
             console.error('Error applying suggestion:', error);
             setError('Failed to apply suggestion. Please try again.');
         }
+    };
+
+    // Helper function to calculate Quill Delta content length
+    const calculateDeltaLength = (delta: any): number => {
+        if (!delta || !delta.ops) return 0;
+
+        return delta.ops.reduce((length: number, op: any) => {
+            if (typeof op.insert === 'string') {
+                return length + op.insert.length;
+            }
+            return length;
+        }, 0);
+    };
+
+    // Enhanced insertion point finder with fuzzy matching for better accuracy
+    const findBestInsertionPoint = (
+        editor: any,
+        contentMarker: string,
+        position: 'before' | 'after'
+    ): number => {
+        const currentText = editor.getText();
+        const originalText = documentModifications.current.originalText || currentText;
+
+        // First try exact match
+        let markerIndex = currentText.indexOf(contentMarker);
+
+        // If not found, try some fallbacks with fuzzy matching
+        if (markerIndex < 0) {
+            // Try with trimmed marker (remove extra spaces)
+            const trimmedMarker = contentMarker.trim();
+            markerIndex = currentText.indexOf(trimmedMarker);
+
+            // If still not found and marker is long enough, try partial matching
+            if (markerIndex < 0 && trimmedMarker.length > 15) {
+                // Try with the first part of the marker
+                const partialMarker = trimmedMarker.substring(0, Math.min(25, trimmedMarker.length));
+                markerIndex = currentText.indexOf(partialMarker);
+
+                // If that fails, try with word boundaries - look for key phrases
+                if (markerIndex < 0) {
+                    // Split by spaces and find significant words (longer than 4 chars)
+                    const words = trimmedMarker.split(/\s+/).filter(w => w.length > 4);
+
+                    // Try to find sections with multiple significant words close together
+                    if (words.length >= 2) {
+                        for (let i = 0; i < words.length - 1; i++) {
+                            const twoWordPhrase = words.slice(i, i + 2).join('\\s+');
+                            const phraseRegex = new RegExp(twoWordPhrase, 'i');
+                            const match = currentText.match(phraseRegex);
+
+                            if (match && match.index !== undefined) {
+                                markerIndex = match.index;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // If we found a position, calculate the proper insertion point
+        if (markerIndex >= 0) {
+            formatLog('info', 'Found marker in document', {
+                marker: contentMarker.substring(0, 30),
+                position,
+                index: markerIndex
+            });
+
+            if (position === 'after') {
+                // Move to end of marker
+                let insertAfter = markerIndex + contentMarker.length;
+
+                // Find next paragraph break or create one
+                const nextNewline = currentText.indexOf('\n', insertAfter);
+                if (nextNewline >= 0 && nextNewline - insertAfter < 100) {
+                    // If there's a newline relatively close, use it
+                    return nextNewline + 1;
+                } else {
+                    // Otherwise insert at end of marker
+                    return insertAfter;
+                }
+            } else {
+                // For 'before', find the start of the paragraph containing the marker
+                let paragraphStart = currentText.lastIndexOf('\n\n', markerIndex);
+                if (paragraphStart === -1) {
+                    paragraphStart = currentText.lastIndexOf('\n', markerIndex);
+                }
+
+                return paragraphStart >= 0 ? paragraphStart + 1 : markerIndex;
+            }
+        }
+
+        // If all else fails, check for semantic section matches
+        // This looks for headers/sections in both original and current text
+        // ...but implementation is complex and would require semantic parsing
+
+        // Fall back to current selection or end of document
+        formatLog('warn', 'Could not find marker in document, using fallback position', {
+            marker: contentMarker.substring(0, 30),
+            position,
+        });
+
+        const currentSelection = editor.getSelection();
+        return currentSelection ? currentSelection.index : editor.getLength() - 1;
     };
 
     // Dismiss a suggestion
@@ -237,6 +394,30 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
     if (suggestions.length === 0 && !loading && !error) {
         console.log("No suggestions found for this note");
     }
+
+    // Add this debugging right before the return statement
+    useEffect(() => {
+        console.log("Suggestions state:", {
+            count: suggestions.length,
+            loading,
+            generating,
+            error
+        });
+    }, [suggestions, loading, generating, error]);
+
+    // Ensure we map over suggestions safely
+    const renderSuggestions = () => {
+        if (!suggestions || suggestions.length === 0) return null;
+
+        return suggestions.map((suggestion) => (
+            <SuggestionItem
+                key={suggestion._id || suggestion.id || Math.random().toString()}
+                suggestion={suggestion}
+                onApply={handleApplySuggestion}
+                onDismiss={handleDismissSuggestion}
+            />
+        ));
+    };
 
     if (!visible) return null;
 
@@ -291,17 +472,16 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
             )}
 
             <div className="suggestions-list">
-                {suggestions.map((suggestion) => (
-                    <SuggestionItem
-                        key={suggestion.id}
-                        suggestion={suggestion}
-                        onApply={handleApplySuggestion}
-                        onDismiss={handleDismissSuggestion}
-                    />
-                ))}
+                {renderSuggestions()}
             </div>
         </div>
     );
+};
+
+// Helper function for logging
+const formatLog = (type: string, message: string, data: any = null) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[SuggestionPanel][${timestamp}][${type}] ${message}`, data || '');
 };
 
 export default SuggestionPanel;
