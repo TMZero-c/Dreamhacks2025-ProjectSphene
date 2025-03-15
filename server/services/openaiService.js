@@ -1,14 +1,28 @@
 const openai = require('../config/openaiConfig');
 
+const formatLog = (type, message, data = null) => {
+    const timestamp = new Date().toISOString();
+    const logObj = {
+        timestamp,
+        type,
+        message,
+        ...(data && { data })
+    };
+    console.log(JSON.stringify(logObj));
+};
+
 /**
  * Generate suggestions based on comparing notes
  */
 exports.generateSuggestions = async (targetNote, otherNotes) => {
-    console.log(`Generating suggestions for note ID: ${targetNote._id}, title: "${targetNote.title}"`);
-    console.log(`Comparing with ${otherNotes.length} other notes`);
+    formatLog('info', 'Starting suggestion generation', {
+        targetNoteId: targetNote._id,
+        targetTitle: targetNote.title,
+        compareCount: otherNotes.length
+    });
 
     if (!targetNote.content) {
-        console.warn('Target note has no content');
+        formatLog('warn', 'Target note has no content', { noteId: targetNote._id });
         return [];
     }
 
@@ -21,15 +35,15 @@ exports.generateSuggestions = async (targetNote, otherNotes) => {
             (targetContent.startsWith('{') || targetContent.startsWith('['))) {
             console.log('Parsing target note content as JSON');
             targetDelta = JSON.parse(targetContent);
-            targetContent = extractTextFromQuillDelta(targetDelta);
+            // No longer extract text - work with delta directly
         }
     } catch (error) {
         console.error('Error parsing target note content:', error);
         // Continue with the original content
     }
 
-    // Extract style patterns from target note
-    const styleAnalysis = analyzeNoteStyle(targetDelta, targetContent);
+    // Extract style patterns from target note - but keep working with delta
+    const styleAnalysis = analyzeNoteStyle(targetDelta);
     console.log('Style analysis:', styleAnalysis);
 
     const suggestions = [];
@@ -44,7 +58,7 @@ exports.generateSuggestions = async (targetNote, otherNotes) => {
 
             console.log(`Comparing with note from user: ${sourceNote.userId}`);
 
-            // Create a prompt for OpenAI to compare documents
+            // Create a prompt for OpenAI to compare documents - passing deltas
             const prompt = createComparisonPrompt(
                 targetNote.content,
                 sourceNote.content,
@@ -57,7 +71,7 @@ exports.generateSuggestions = async (targetNote, otherNotes) => {
             console.log('Calling OpenAI API...');
             try {
                 const response = await openai.chat.completions.create({
-                    model: "gpt-4",
+                    model: "gpt-4o",
                     messages: [
                         {
                             role: "system",
@@ -70,7 +84,7 @@ exports.generateSuggestions = async (targetNote, otherNotes) => {
                         { role: "user", content: prompt }
                     ],
                     temperature: 0.7,
-                    max_tokens: 1500 // allows full JSON response
+                    max_tokens: 4096 // allows full JSON response
                 });
 
                 // Check for valid response
@@ -84,8 +98,10 @@ exports.generateSuggestions = async (targetNote, otherNotes) => {
                     continue;
                 }
 
-                console.log('Received response from OpenAI:',
-                    messageContent.substring(0, 100) + '...');
+                formatLog('debug', 'OpenAI API response received', {
+                    responseLength: messageContent?.length,
+                    firstChars: messageContent?.substring(0, 100)
+                });
 
                 // Parse the response and create suggestion objects
                 const noteId = targetNote._id.toString();
@@ -99,7 +115,11 @@ exports.generateSuggestions = async (targetNote, otherNotes) => {
                 suggestions.push(...suggestionsFromResponse);
 
             } catch (apiError) {
-                console.error('OpenAI API error:', apiError);
+                formatLog('error', 'OpenAI API error', {
+                    error: apiError.message,
+                    code: apiError.code,
+                    stack: apiError.stack
+                });
                 console.log('Continuing with other notes despite API error');
             }
 
@@ -114,27 +134,32 @@ exports.generateSuggestions = async (targetNote, otherNotes) => {
 };
 
 /**
- * Create a prompt for the OpenAI API to compare two documents
+ * Create a prompt for the OpenAI API to compare two documents using Delta format
  */
 function createComparisonPrompt(documentA, documentB, titleA = '', titleB = '', styleAnalysis = {}) {
-    // Parse JSON content if necessary
-    let contentA = documentA;
-    let contentB = documentB;
+    formatLog('debug', 'Creating comparison prompt', {
+        titleA,
+        titleB,
+        docALength: documentA?.length,
+        docBLength: documentB?.length
+    });
+
+    // Parse JSON content but don't extract text
+    let deltaA = documentA;
+    let deltaB = documentB;
 
     try {
         if (typeof documentA === 'string' &&
             (documentA.startsWith('{') || documentA.startsWith('['))) {
-            const parsedA = JSON.parse(documentA);
-            contentA = extractTextFromQuillDelta(parsedA);
+            deltaA = JSON.parse(documentA);
         }
 
         if (typeof documentB === 'string' &&
             (documentB.startsWith('{') || documentB.startsWith('['))) {
-            const parsedB = JSON.parse(documentB);
-            contentB = extractTextFromQuillDelta(parsedB);
+            deltaB = JSON.parse(documentB);
         }
     } catch (error) {
-        console.error('Error parsing document content:', error);
+        formatLog('error', 'Error parsing document content', { error: error.message });
         // Continue with original content if parsing fails
     }
 
@@ -153,21 +178,22 @@ Style guidance for Document A:
 - Headers pattern: ${styleAnalysis.headersPattern || 'standard'}
 - Formatting preferences: ${styleAnalysis.formattingPreferences || 'minimal'}
 
-It's critical that your suggestions match Document A's existing style - NOT Document B's style.
+It's critical that your suggestions match Document A's existing style and formatting patterns.
 `;
     }
 
-    return `${titleText}Compare the following two documents:
+    return `${titleText}Compare the following two documents represented as Quill Delta JSON objects:
   
 Document A (Target document that needs improvement):
-"${contentA}"
+${JSON.stringify(deltaA, null, 2)}
 
 Document B (Source document that may contain additional information):
-"${contentB}"
+${JSON.stringify(deltaB, null, 2)}
 
 ${styleGuidance}
 
 Identify key points, concepts, or information present in Document B but missing from Document A.
+
 For each missing element, generate:
 1. A brief title describing the missing information
 2. The type of suggestion (choose from: missing_content, clarification, structure, key_point)
@@ -175,6 +201,7 @@ For each missing element, generate:
 
 The Quill Delta object should:
 - Follow Document A's writing style, tone, and terminology
+- Match Document A's formatting patterns with similar attributes
 - Use appropriate header levels if headers are used in Document A
 - Match Document A's use of bullet points, emphasis, and other formatting
 - Be properly formatted with valid "ops" array structure
@@ -186,8 +213,6 @@ Format your response as JSON with the following structure:
     "type": "suggestion_type",
     "content": {
       "ops": [
-        {"insert": "Heading", "attributes": {"header": 3}},
-        {"insert": "\\n"},
         {"insert": "The missing content with appropriate formatting.\\n"}
       ]
     }
@@ -213,8 +238,9 @@ function extractTextFromQuillDelta(delta) {
 
 /**
  * Analyze a note's writing style to help guide AI suggestions
+ * Works directly with Delta objects
  */
-function analyzeNoteStyle(delta, plainText) {
+function analyzeNoteStyle(delta) {
     const analysis = {
         sentenceLength: 'medium',
         formalityLevel: 'moderate',
@@ -223,25 +249,30 @@ function analyzeNoteStyle(delta, plainText) {
         formattingPreferences: ''
     };
 
-    // If we don't have a valid delta or text, return default analysis
-    if (!delta || !delta.ops || !plainText) {
+    // If we don't have a valid delta, return default analysis
+    if (!delta || !delta.ops) {
         return analysis;
     }
 
     try {
+        // Extract text content for sentence analysis
+        const plainText = extractTextFromQuillDelta(delta);
+
         // Analyze sentence length
         const sentences = plainText.split(/[.!?]+/).filter(s => s.trim().length > 0);
-        const avgSentenceLength = sentences.reduce((sum, s) => sum + s.length, 0) / sentences.length;
+        const avgSentenceLength = sentences.length > 0 ?
+            sentences.reduce((sum, s) => sum + s.length, 0) / sentences.length : 0;
 
         if (avgSentenceLength < 60) analysis.sentenceLength = 'short';
         else if (avgSentenceLength > 120) analysis.sentenceLength = 'long';
 
-        // Check for formal language indicators
+        // Check for formal language indicators in plain text
         const formalIndicators = ["however", "therefore", "consequently", "thus", "hence"];
         const informalIndicators = ["anyway", "plus", "so", "also", "like", "actually"];
 
         let formalCount = 0;
         let informalCount = 0;
+
         formalIndicators.forEach(word => {
             const regex = new RegExp(`\\b${word}\\b`, 'gi');
             const matches = plainText.match(regex);
@@ -257,7 +288,7 @@ function analyzeNoteStyle(delta, plainText) {
         if (formalCount > informalCount * 2) analysis.formalityLevel = 'formal';
         else if (informalCount > formalCount * 2) analysis.formalityLevel = 'casual';
 
-        // Check for bullet points and headers
+        // Directly analyze delta for formatting
         let bulletPointCount = 0;
         let headerCount = 0;
         let formattingStyles = new Set();
@@ -291,7 +322,7 @@ function analyzeNoteStyle(delta, plainText) {
         analysis.formattingPreferences = Array.from(formattingStyles).join(', ') || 'minimal';
 
     } catch (error) {
-        console.error('Error analyzing note style:', error);
+        formatLog('error', 'Error analyzing note style', { error: error.message });
     }
 
     return analysis;
@@ -301,6 +332,12 @@ function analyzeNoteStyle(delta, plainText) {
  * Parse the OpenAI response into suggestion objects
  */
 function parseSuggestionsFromResponse(responseContent, noteId, sourceUserId) {
+    formatLog('debug', 'Parsing suggestions from response', {
+        noteId,
+        sourceUserId,
+        responseLength: responseContent.length
+    });
+
     try {
         console.log('Parsing response for suggestions');
         console.log('Note ID for suggestions:', noteId);
@@ -330,10 +367,22 @@ function parseSuggestionsFromResponse(responseContent, noteId, sourceUserId) {
             };
         }).filter(s => s.content !== null);
 
+        formatLog('info', 'Successfully parsed suggestions', {
+            totalSuggestions: validatedSuggestions.length,
+            validSuggestions: validatedSuggestions.map(s => ({
+                title: s.title,
+                type: s.type
+            }))
+        });
+
         console.log(`Validated ${validatedSuggestions.length} suggestions with proper Delta format`);
         return validatedSuggestions;
 
     } catch (error) {
+        formatLog('error', 'Failed to parse suggestions', {
+            error: error.message,
+            stack: error.stack
+        });
         console.error('Error parsing OpenAI response:', error);
         return [];
     }
@@ -344,7 +393,9 @@ function parseSuggestionsFromResponse(responseContent, noteId, sourceUserId) {
  */
 function validateQuillDelta(content) {
     if (!content || typeof content !== 'object') {
-        console.log('Invalid content format, not an object');
+        formatLog('warn', 'Invalid Delta format', {
+            received: typeof content
+        });
         return null;
     }
 
@@ -362,7 +413,10 @@ function validateQuillDelta(content) {
 
     // If ops were filtered, log a warning
     if (validOps.length !== content.ops.length) {
-        console.log(`Fixed Delta by removing ${content.ops.length - validOps.length} invalid ops`);
+        formatLog('warn', 'Fixed invalid Delta operations', {
+            original: content.ops.length,
+            valid: validOps.length
+        });
     }
 
     // Ensure proper line breaks at the end
