@@ -1,34 +1,63 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+import { useState, useEffect } from 'react'
 import './App.css'
+import TextEditor from './components/TextEditor'
+import Header from './components/Header'
+
+import { Note } from './types/types'
+import { fetchNotes, saveNote } from './services/api'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [currentNote, setCurrentNote] = useState<Note>({ id: '', content: '', userId: 'current-user', title: 'Untitled Note' })
+  const [loading, setLoading] = useState(false)
+
+  // Load initial note data
+  useEffect(() => {
+    const loadInitialData = async () => {
+      setLoading(true)
+      try {
+        // for now using temp id
+        const notes = await fetchNotes('current-user')
+        if (notes.length > 0) {
+          setCurrentNote(notes[0])
+        }
+
+      } catch (error) {
+        console.error('Failed to load initial data:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadInitialData()
+  }, [])
+
+  // Save the current note and trigger suggestion generation
+  const handleSaveNote = async (content: string) => {
+    setLoading(true)
+    try {
+      const updatedNote = { ...currentNote, content }
+      const savedNote = await saveNote(updatedNote)
+      setCurrentNote(savedNote)
+
+    } catch (error) {
+      console.error('Failed to save note:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="app-container">
+      <Header title="Collaborative Notes" loading={loading} />
+      <div className="main-content">
+        <TextEditor
+          content={currentNote.content}
+          onSave={handleSaveNote}
+        />
+
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    </div>
   )
 }
 
