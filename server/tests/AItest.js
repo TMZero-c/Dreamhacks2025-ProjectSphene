@@ -1,23 +1,19 @@
-// testOpenAI.js
-require('dotenv').config();
+require('dotenv').config();  // Correct path to the .env file
 
-const { Configuration, OpenAIApi } = require('openai');
-require('dotenv').config();
+const { OpenAI } = require('openai');
 
-// Initialize OpenAI
-const configuration = new Configuration({
-  apiKey: process.env.OPENAI_API_KEY, // Assuming your API key is in .env
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
-const openai = new OpenAIApi(configuration);
 
 async function testOpenAI() {
   try {
-    const response = await openai.createCompletion({
-      model: "text-davinci-003",
-      prompt: "Say hello to the world.",
-      max_tokens: 10,
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",  // or any other model you want to use
+      messages: [{ role: "user", content: "Say hello to the world." }],
     });
-    console.log('OpenAI response:', response.data.choices[0].text.trim());
+    console.log('OpenAI response:', response.choices[0].message.content.trim());
   } catch (error) {
     console.error('OpenAI test failed:', error);
   }
