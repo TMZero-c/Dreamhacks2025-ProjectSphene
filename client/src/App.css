@@ -1,13 +1,18 @@
+@import "tailwindcss";
+
 :root {
-  --primary-color: #4a6fa5;
-  --secondary-color: #166088;
-  --accent-color: #4cb5ae;
-  --background-color: #f9f9f9;
-  --card-background: #ffffff;
+  --primary: #79CCB2;
+  --secondary: #7A8B8F;
+  --background: #F8F0D2;
+  --white: #FFFFFF;
   --text-color: #333333;
-  --border-color: #e0e0e0;
+  --border-color: #E5E5E5;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
 }
 
+/* Reset styles */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -15,255 +20,107 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  background-color: var(--background-color);
-  color: var(--text-color);
+  margin: 0;
+  min-width: 320px;
+  height: 100vh;
+  color: var(--secondary);
+  background-color: var(--background);
 }
 
+/* Reset the root container styles to allow full-width layout */
 #root {
-  max-width: 1280px;
+  width: 100%;
   margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  padding: 0;
+  display: flex;
+  justify-content: center;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
-
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
-}
-
+/* Layout styles */
 .app-container {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-}
-
-.app-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 2rem;
-  background-color: var(--primary-color);
-  color: white;
-}
-
-.header-content {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.loading-indicator {
-  font-size: 0.8rem;
-  background-color: rgba(255, 255, 255, 0.2);
-  padding: 0.3rem 0.6rem;
-  border-radius: 4px;
-}
-
-.user-button {
-  background-color: var(--secondary-color);
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  cursor: pointer;
+  width: 100%;
+  background-color: var(--background);
 }
 
 .main-content {
   display: flex;
-  flex: 1;
-  padding: 1.5rem;
-  gap: 1.5rem;
-}
-
-.editor-container {
-  flex: 3;
-  display: flex;
   flex-direction: column;
-}
-
-.editor-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.editor-controls {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.autosave-status {
-  font-size: 0.8rem;
-  color: #888;
-}
-
-.autosave-status.active {
-  color: var(--accent-color);
-}
-
-.editor-container .ql-container {
-  height: calc(100vh - 200px);
-  border-radius: 0 0 4px 4px;
-  background-color: var(--card-background);
-}
-
-.editor-container .ql-toolbar {
-  border-radius: 4px 4px 0 0;
-  background-color: #f5f5f5;
-}
-
-.suggestion-panel {
   flex: 1;
-  background-color: var(--card-background);
-  border-radius: 4px;
-  padding: 1rem;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-  height: calc(100vh - 140px);
-  overflow-y: auto;
+  padding: 16px;
+  gap: 16px;
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
 }
 
-.suggestions-list {
-  margin-top: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.8rem;
+@media (min-width: 640px) {
+  .main-content {
+    padding: 20px;
+    gap: 20px;
+  }
 }
 
-.suggestion-card {
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  overflow: hidden;
-  transition: box-shadow 0.3s ease;
+@media (min-width: 992px) {
+  .main-content {
+    flex-direction: row;
+    padding: 24px 32px 40px;
+    gap: 24px;
+  }
 }
 
-.suggestion-card.expanded {
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+.editor-section {
+  width: 100%;
+  transition: all 0.3s ease;
 }
 
-.suggestion-header {
-  padding: 0.8rem;
-  background-color: #f5f7fa;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+.editor-section.with-suggestions {
+  width: 100%;
 }
 
-.suggestion-indicator {
-  width: 8px;
-  height: 8px;
-  background-color: var(--accent-color);
-  border-radius: 50%;
+@media (min-width: 992px) {
+  .editor-section.with-suggestions {
+    width: 66.666%;
+  }
 }
 
-.suggestion-header h3 {
-  font-size: 0.9rem;
-  flex: 1;
-  margin: 0;
+.suggestions-section {
+  width: 100%;
+  transition: all 0.3s ease;
+  margin-top: 16px;
 }
 
-.expand-icon {
-  font-size: 1.2rem;
-  color: #888;
+@media (min-width: 768px) {
+  .suggestions-section {
+    margin-top: 20px;
+  }
 }
 
-.suggestion-content {
-  padding: 1rem;
-  background-color: white;
-  border-top: 1px solid var(--border-color);
+@media (min-width: 992px) {
+  .suggestions-section {
+    width: 33.333%;
+    margin-top: 0;
+  }
 }
 
-.suggestion-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  margin-top: 1rem;
-}
-
-.apply-btn,
-.dismiss-btn {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-.apply-btn {
-  background-color: var(--accent-color);
-  color: white;
-}
-
-.dismiss-btn {
-  background-color: #f0f0f0;
-  color: #666;
-}
-
-.empty-suggestions {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 200px;
-  color: #888;
-  text-align: center;
-}
-
-.hint {
-  font-size: 0.85rem;
-  margin-top: 0.5rem;
-  max-width: 80%;
-}
-
+/* Button reset styles */
 button {
-  background-color: var(--primary-color);
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s;
+  font-family: inherit;
+  font-size: 100%;
+  line-height: 1.15;
+  margin: 0;
+  overflow: visible;
+  text-transform: none;
+  -webkit-appearance: button;
 }
 
-button:hover {
-  background-color: var(--secondary-color);
+button::-moz-focus-inner {
+  border-style: none;
+  padding: 0;
+}
+
+button:-moz-focusring {
+  outline: 1px dotted ButtonText;
 }

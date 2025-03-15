@@ -1,75 +1,128 @@
 @import "tailwindcss";
 
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  --primary: #79CCB2;
+  --secondary: #7A8B8F;
+  --background: #F8F0D2;
+  --white: #FFFFFF;
+  --text-color: #333333;
+  --border-color: #E5E5E5;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-
-a:hover {
-  color: #535bf2;
+/* Reset styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  color: var(--secondary);
+  background-color: var(--background);
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+/* Reset the root container styles to allow full-width layout */
+#root {
+  width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  display: flex;
+  justify-content: center;
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
+/* Layout styles */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+  background-color: var(--background);
 }
 
-button:hover {
-  border-color: #646cff;
+.main-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 24px 32px 40px;
+  gap: 24px;
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
 }
 
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
+@media (min-width: 992px) {
+  .main-content {
+    flex-direction: row;
   }
+}
 
-  a:hover {
-    color: #747bff;
-  }
+.editor-section {
+  width: 100%;
+  transition: all 0.3s ease;
+}
 
-  button {
-    background-color: #f9f9f9;
+.editor-section.with-suggestions {
+  width: 100%;
+}
+
+@media (min-width: 992px) {
+  .editor-section.with-suggestions {
+    width: 66.666%;
   }
+}
+
+.suggestions-section {
+  width: 100%;
+  transition: all 0.3s ease;
+  margin-top: 24px;
+}
+
+@media (min-width: 992px) {
+  .suggestions-section {
+    width: 33.333%;
+    margin-top: 0;
+  }
+}
+
+/* Custom color classes */
+.bg-primary {
+  background-color: var(--primary);
+}
+
+.bg-secondary {
+  background-color: var(--secondary);
+}
+
+.bg-cream {
+  background-color: var(--background);
+}
+
+.text-primary {
+  color: var(--primary);
+}
+
+.text-secondary {
+  color: var(--secondary);
+}
+
+.border-primary {
+  border-color: var(--primary);
+}
+
+.border-secondary {
+  border-color: var(--secondary);
+}
+
+.hover\:bg-primary-dark:hover {
+  background-color: #68b9a1;
+}
+
+.hover\:bg-secondary-dark:hover {
+  background-color: #697a7e;
 }
