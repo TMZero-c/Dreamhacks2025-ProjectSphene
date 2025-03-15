@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchSuggestions, respondToSuggestion, triggerDocumentComparison } from '../services/api';
 import SuggestionItem from './SuggestionItem';
 import { Suggestion } from '../types/types';
@@ -27,6 +27,18 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
     const [generating, setGenerating] = useState(false);
     const hasFetched = useRef(false);
     const hasTriggeredGeneration = useRef(false);
+
+    // Add debouncing for button clicks
+    const [isGenerateButtonDisabled, setIsGenerateButtonDisabled] = useState(false);
+    const [isRefreshButtonDisabled, setIsRefreshButtonDisabled] = useState(false);
+
+    // Keep track of active operations to prevent race conditions
+    const activeOperation = useRef<string | null>(null);
+
+    // Only clear errors when explicitly dismissed by user
+    const clearError = () => {
+        setError(null);
+    };
 
     // Fetch suggestions when the panel becomes visible or lectureId/noteId changes
     useEffect(() => {
@@ -73,9 +85,13 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
         hasTriggeredGeneration.current = false;
     }, [noteId, lectureId, userId]);
 
-    const loadSuggestions = async () => {
+    // Debounced function to fetch suggestions
+    const debouncedLoadSuggestions = useCallback(async () => {
+        if (activeOperation.current === 'loadSuggestions') return;
+
+        activeOperation.current = 'loadSuggestions';
+        setIsRefreshButtonDisabled(true);
         setLoading(true);
-        setError(null);
 
         try {
             const data = noteId
@@ -83,26 +99,47 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
                 : await fetchSuggestions(null, lectureId, userId);
 
             setSuggestions(data);
+
+            // Only clear error on success
+            if (error && error.includes('load')) {
+                clearError();
+            }
         } catch (err) {
             console.error('Failed to load suggestions:', err);
             setError('Failed to load suggestions. Please try again.');
         } finally {
             setLoading(false);
+            activeOperation.current = null;
+
+            // Re-enable button after a short delay
+            setTimeout(() => {
+                setIsRefreshButtonDisabled(false);
+            }, 1000);
         }
+    }, [noteId, lectureId, userId, error]);
+
+    // Create a wrapper for the loadSuggestions function
+    const handleRefreshClick = () => {
+        if (isRefreshButtonDisabled || loading || generating) return;
+        debouncedLoadSuggestions();
     };
 
     // Generate new suggestions using AI
     const handleGenerateSuggestions = async () => {
-        // Clear any previous errors
-        setError(null);
+        if (activeOperation.current === 'generateSuggestions') return;
 
+        // Don't clear previous errors automatically
+
+        // Validate the necessary IDs
         if (!lectureId) {
             setError('Cannot generate suggestions: Lecture ID is missing');
             return;
         }
 
+        activeOperation.current = 'generateSuggestions';
         hasTriggeredGeneration.current = true;
         setGenerating(true);
+        setIsGenerateButtonDisabled(true);
 
         try {
             console.log(`Triggering document comparison for lecture: ${lectureId}, user: ${userId}`);
@@ -117,17 +154,26 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
 
             if (result?.suggestions?.length === 0) {
                 setError('No suggestions were generated. You might need other users to take notes in this lecture first.');
+            } else {
+                // Only clear error on success
+                clearError();
             }
 
             // Wait a moment before reloading to ensure suggestions are saved
             setTimeout(async () => {
-                await loadSuggestions();
+                await debouncedLoadSuggestions();
             }, 1000);
         } catch (err: any) {
             console.error('Failed to generate suggestions:', err);
             setError(`Failed to generate suggestions: ${err?.message || 'Unknown error'}`);
         } finally {
             setGenerating(false);
+            activeOperation.current = null;
+
+            // Re-enable button after a delay
+            setTimeout(() => {
+                setIsGenerateButtonDisabled(false);
+            }, 2000); // Longer delay for generate button to prevent rapid clicking
         }
     };
 
@@ -193,15 +239,15 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
                 <div className="panel-actions">
                     <button
                         onClick={handleGenerateSuggestions}
-                        disabled={loading || generating}
-                        className="generate-button"
+                        disabled={loading || generating || isGenerateButtonDisabled}
+                        className={`generate-button ${isGenerateButtonDisabled ? 'disabled' : ''}`}
                     >
                         {generating ? 'Generating...' : 'Generate Suggestions'}
                     </button>
                     <button
-                        onClick={loadSuggestions}
-                        disabled={loading || generating}
-                        className="refresh-button"
+                        onClick={handleRefreshClick}
+                        disabled={loading || generating || isRefreshButtonDisabled}
+                        className={`refresh-button ${isRefreshButtonDisabled ? 'disabled' : ''}`}
                     >
                         {loading ? 'Loading...' : 'Refresh'}
                     </button>
@@ -211,6 +257,13 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
             {error && (
                 <div className="error-message">
                     {error}
+                    <button
+                        className="dismiss-error"
+                        onClick={clearError}
+                        aria-label="Dismiss error"
+                    >
+                        ×
+                    </button>
                 </div>
             )}
 

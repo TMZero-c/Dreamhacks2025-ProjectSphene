@@ -41,6 +41,10 @@ function App() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const editorRef = useRef(null);
 
+  // Add a reference to track the currently selected lecture to prevent race conditions
+  const currentOperation = useRef<string | null>(null);
+  const lastSelectedLectureId = useRef<string | null>(null);
+
   // Load initial lectures when the app starts
   useEffect(() => {
     const loadInitialLectures = async () => {
@@ -75,7 +79,9 @@ function App() {
 
   // Load notes when selected lecture changes
   useEffect(() => {
-    if (selectedLecture) {
+    if (selectedLecture && selectedLecture._id !== lastSelectedLectureId.current) {
+      lastSelectedLectureId.current = selectedLecture._id;
+
       // Clear current note first to avoid showing stale data
       setCurrentNote({
         id: '',
@@ -91,11 +97,27 @@ function App() {
 
   // Load note for a specific lecture - simplified to one note per lecture
   const loadNoteForLecture = async (lectureId: string) => {
+    // If there's already an active operation for this lecture, don't start another one
+    if (currentOperation.current === lectureId) return;
+
+    currentOperation.current = lectureId;
     setLoading(true);
     console.log(`Loading note for lecture: ${lectureId}`);
 
     try {
+      // If the selected lecture has changed while we're fetching, abort
+      if (lastSelectedLectureId.current !== lectureId) {
+        console.log('Lecture selection changed during load, aborting');
+        return;
+      }
+
       const notes = await fetchNotes(userId, lectureId);
+
+      // Check again if selected lecture has changed
+      if (lastSelectedLectureId.current !== lectureId) {
+        console.log('Lecture selection changed after fetching notes, aborting');
+        return;
+      }
 
       if (notes && notes.length > 0) {
         // Use the first (and should be only) note
@@ -103,6 +125,7 @@ function App() {
         setCurrentNote(notes[0]);
       } else {
         console.log('No note found, creating default note for this lecture');
+
         // Create a default note for this lecture
         const defaultNote: Note = {
           id: '', // Let the server generate an ID
@@ -117,6 +140,11 @@ function App() {
           title: selectedLecture?.title || 'New Note'
         };
 
+        // Final check before saving
+        if (lastSelectedLectureId.current !== lectureId) {
+          return;
+        }
+
         // Save the note immediately
         const savedNote = await saveNote(defaultNote);
         console.log('Created default note:', savedNote);
@@ -125,21 +153,27 @@ function App() {
     } catch (error) {
       console.error('Failed to load note for lecture:', error);
 
-      // Set a default note even on error, but don't try to save it
-      setCurrentNote({
-        id: '',
-        content: JSON.stringify({
-          ops: [
-            { insert: 'Error Loading Note\n', attributes: { header: 1 } },
-            { insert: 'There was an error loading your note. Please try again.\n' }
-          ]
-        }),
-        userId: userId,
-        lectureId: lectureId,
-        title: 'Error'
-      });
+      // Only set error state if this is still the selected lecture
+      if (lastSelectedLectureId.current === lectureId) {
+        // Set a default note even on error
+        setCurrentNote({
+          id: '',
+          content: JSON.stringify({
+            ops: [
+              { insert: 'Error Loading Note\n', attributes: { header: 1 } },
+              { insert: 'There was an error loading your note. Please try again.\n' }
+            ]
+          }),
+          userId: userId,
+          lectureId: lectureId,
+          title: 'Error'
+        });
+      }
     } finally {
-      setLoading(false);
+      if (lastSelectedLectureId.current === lectureId) {
+        setLoading(false);
+      }
+      currentOperation.current = null;
     }
   };
 
@@ -170,9 +204,19 @@ function App() {
     }
   };
 
-  // Handle lecture selection
+  // Handle lecture selection with debouncing
   const handleLectureSelect = (lecture: Lecture) => {
-    setSelectedLecture(lecture);
+    if (lecture._id === selectedLecture?._id) return; // Already selected
+
+    // Clear any existing timeout
+    if (window.selectLectureTimeout) {
+      clearTimeout(window.selectLectureTimeout);
+    }
+
+    // Use a slight timeout to avoid rapid changes
+    window.selectLectureTimeout = setTimeout(() => {
+      setSelectedLecture(lecture);
+    }, 100);
   };
 
   // Toggle suggestion panel visibility
@@ -293,5 +337,15 @@ function App() {
     </div>
   )
 }
+
+// Add this to the Window interface
+declare global {
+  interface Window {
+    selectLectureTimeout: NodeJS.Timeout | null;
+  }
+}
+
+// Initialize the property
+window.selectLectureTimeout = null;
 
 export default App
