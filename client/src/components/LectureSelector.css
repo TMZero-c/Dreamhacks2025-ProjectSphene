@@ -1,0 +1,148 @@
+.lecture-selector {
+    background-color: #f5f5f5;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 15px;
+    width: 100%;
+    max-width: 300px;
+    margin-bottom: 20px;
+}
+
+.lecture-selector-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.lecture-selector-header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+}
+
+.small-button {
+    background-color: #e0e0e0;
+    border: none;
+    border-radius: 4px;
+    padding: 5px 10px;
+    margin-left: 10px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background-color 0.2s;
+}
+
+.small-button:hover {
+    background-color: #d0d0d0;
+}
+
+.form-panel {
+    background-color: white;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 15px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.form-panel input,
+.form-panel textarea {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.form-panel textarea {
+    min-height: 60px;
+    resize: vertical;
+}
+
+.form-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.form-buttons button {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.form-buttons button[type="submit"] {
+    background-color: #4285f4;
+    color: white;
+}
+
+.form-buttons button[type="submit"]:hover:not(:disabled) {
+    background-color: #3b78e7;
+}
+
+.form-buttons button[type="submit"]:disabled {
+    background-color: #a9c6fa;
+    cursor: not-allowed;
+}
+
+.form-buttons button[type="button"] {
+    background-color: #e0e0e0;
+}
+
+.error-message {
+    color: #d32f2f;
+    margin: 10px 0;
+    font-size: 0.9rem;
+}
+
+.loading-indicator {
+    text-align: center;
+    color: #666;
+    margin: 15px 0;
+    font-size: 0.9rem;
+}
+
+.empty-state {
+    text-align: center;
+    color: #666;
+    margin: 20px 0;
+    font-size: 0.9rem;
+}
+
+.empty-state p {
+    margin: 5px 0;
+}
+
+.lecture-list {
+    margin-top: 15px;
+}
+
+.lecture-item {
+    background-color: white;
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    border: 1px solid #e0e0e0;
+}
+
+.lecture-item:hover {
+    background-color: #f9f9f9;
+}
+
+.lecture-item.selected {
+    border-color: #4285f4;
+    background-color: #e8f0fe;
+}
+
+.lecture-title {
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.lecture-code {
+    font-size: 0.8rem;
+    color: #666;
+}

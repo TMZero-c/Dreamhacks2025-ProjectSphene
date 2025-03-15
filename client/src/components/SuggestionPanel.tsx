@@ -6,16 +6,18 @@ import './SuggestionPanel.css';
 
 interface SuggestionPanelProps {
     noteId: string;
+    lectureId?: string; // Add lectureId prop
     quillRef: React.RefObject<any>;
     visible: boolean;
 }
 
 const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
     noteId,
+    lectureId,
     quillRef,
     visible
 }) => {
-    console.log(`SuggestionPanel rendering for noteId: ${noteId}`);
+    console.log(`SuggestionPanel rendering for noteId: ${noteId}, lectureId: ${lectureId}`);
 
     const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
     const [loading, setLoading] = useState(false);
@@ -86,19 +88,37 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
     const handleGenerateSuggestions = async () => {
         if (!noteId || generating) return;
 
+        if (!noteId.trim()) {
+            console.error("Cannot generate suggestions: Note ID is empty");
+            setError('Cannot generate suggestions: Invalid note ID');
+            return;
+        }
+
+        if (!lectureId) {
+            console.error("Cannot generate suggestions: Lecture ID is missing");
+            setError('Cannot generate suggestions: No lecture selected');
+            return;
+        }
+
         hasTriggeredGeneration.current = true;
         setGenerating(true);
         setError(null);
 
         try {
-            console.log(`Triggering document comparison for note ${noteId}`);
-            await triggerDocumentComparison(noteId);
+            console.log(`Triggering document comparison for note ${noteId} in lecture ${lectureId}`);
 
-            // Reload suggestions after comparison is done
-            await loadSuggestions();
-        } catch (err) {
+            // Pass the lectureId to the comparison function
+            const result = await triggerDocumentComparison(noteId, lectureId);
+
+            console.log('Document comparison complete, result:', result);
+
+            // Wait a moment before reloading to ensure suggestions are saved
+            setTimeout(async () => {
+                await loadSuggestions();
+            }, 1000);
+        } catch (err: any) {
             console.error('Failed to generate suggestions:', err);
-            setError('Failed to generate suggestions. Please try again.');
+            setError(`Failed to generate suggestions: ${err?.message || 'Unknown error'}`);
         } finally {
             setGenerating(false);
         }

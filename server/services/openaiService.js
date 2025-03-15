@@ -11,18 +11,28 @@ exports.generateSuggestions = async (targetNote, otherNotes) => {
     console.log(`Generating suggestions for note ID: ${targetNote.id || targetNote._id}`);
     console.log(`Comparing with ${otherNotes.length} other notes`);
 
+    if (!targetNote.content) {
+        console.warn('Target note has no content');
+        return [];
+    }
+
     const suggestions = [];
 
     // Process each note for comparison
     for (const sourceNote of otherNotes) {
         try {
+            if (!sourceNote.content) {
+                console.warn(`Source note from user ${sourceNote.userId} has no content, skipping`);
+                continue;
+            }
+
             console.log(`Comparing with note from user: ${sourceNote.userId}`);
 
             // Create a prompt for OpenAI to compare documents
             const prompt = createComparisonPrompt(targetNote.content, sourceNote.content);
 
             // Call OpenAI API with the prompt
-            console.log('Calling OpenAI API with prompt:', prompt);
+            console.log('Calling OpenAI API...');
             const response = await openai.chat.completions.create({
                 model: "gpt-4",
                 messages: [
@@ -38,13 +48,14 @@ exports.generateSuggestions = async (targetNote, otherNotes) => {
                 max_tokens: 1500 // allows full JSON response
             });
 
-            console.log('OpenAI response:', response);
-
+            // Check for valid response
             const messageContent = response.choices && response.choices[0] && response.choices[0].message && response.choices[0].message.content;
             if (!messageContent) {
                 console.warn('No message content received from OpenAI');
                 continue;
             }
+
+            console.log('Received response from OpenAI:', messageContent.substring(0, 100) + '...');
 
             // Parse the response and create suggestion objects
             const noteId = targetNote.id || targetNote._id.toString();

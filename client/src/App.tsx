@@ -3,9 +3,10 @@ import './App.css'
 import TextEditor from './components/TextEditor'
 import Header from './components/Header'
 import SuggestionPanel from './components/SuggestionPanel'
+import LectureSelector from './components/LectureSelector'
 
-import { Note } from './types/types'
-import { fetchNotes, saveNote } from './services/api'
+import { Note, Lecture } from './types/types'
+import { fetchNotes, saveNote, fetchUserLectures, createLecture } from './services/api'
 
 // Test user IDs for easier testing
 const TEST_USER_IDS = ['user1', 'user2', 'user3'];
@@ -26,79 +27,152 @@ function App() {
   const [userIdInput, setUserIdInput] = useState('');
   const [showUserIdInput, setShowUserIdInput] = useState(false);
 
+  // State for the current note and lecture
   const [currentNote, setCurrentNote] = useState<Note>({
     id: '',
     content: '',
     userId: userId,
-    title: 'Loading...'
+    title: 'Loading...',
+    lectureId: ''
   });
 
+  const [selectedLecture, setSelectedLecture] = useState<Lecture | null>(null);
   const [loading, setLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const editorRef = useRef(null);
 
-  // Load initial note data
+  // Load initial lectures when the app starts
   useEffect(() => {
-    const loadInitialData = async () => {
+    const loadInitialLectures = async () => {
       setLoading(true);
-      console.log(`Loading notes for user: ${userId}`);
       try {
-        const notes = await fetchNotes(userId);
-        if (notes && notes.length > 0) {
-          console.log(`Loaded note: ${notes[0].title}`);
-          setCurrentNote(notes[0]);
-        } else {
-          console.log('No notes found, using default');
-          // If still no notes, ensure we have a valid note object
-          setCurrentNote({
-            id: `default-${Date.now()}`,
-            content: JSON.stringify({
-              ops: [
-                { insert: 'New Note\n', attributes: { header: 1 } },
-                { insert: 'Start writing here...\n' }
-              ]
-            }),
-            userId: userId,
-            title: 'New Note'
+        const lectures = await fetchUserLectures(userId);
+
+        // If the user has no lectures, create a default one
+        if (!lectures || lectures.length === 0) {
+          const defaultLecture = await createLecture({
+            title: 'My First Lecture',
+            description: 'Default lecture for notes',
+            code: Math.random().toString(36).substring(2, 8).toUpperCase(),
+            createdBy: userId
           });
+
+          setSelectedLecture(defaultLecture);
+        } else {
+          setSelectedLecture(lectures[0]);
         }
       } catch (error) {
-        console.error('Failed to load initial data:', error);
-        // Set a default note even on error
-        setCurrentNote({
-          id: `default-${Date.now()}`,
-          content: JSON.stringify({
-            ops: [
-              { insert: 'New Note\n', attributes: { header: 1 } },
-              { insert: 'Start writing here...\n' }
-            ]
-          }),
-          userId: userId,
-          title: 'New Note'
-        });
+        console.error('Failed to load initial lectures:', error);
       } finally {
         setLoading(false);
       }
     };
 
     if (userId) {
-      loadInitialData();
+      loadInitialLectures();
     }
   }, [userId]);
 
+  // Load notes when selected lecture changes
+  useEffect(() => {
+    if (selectedLecture) {
+      // Clear current note first to avoid showing stale data
+      setCurrentNote({
+        id: '',
+        content: '',
+        userId: userId,
+        title: selectedLecture.title, // Use lecture title as default note title
+        lectureId: selectedLecture._id
+      });
+
+      loadNoteForLecture(selectedLecture._id);
+    }
+  }, [selectedLecture, userId]);
+
+  // Load note for a specific lecture - simplified to one note per lecture
+  const loadNoteForLecture = async (lectureId: string) => {
+    setLoading(true);
+    console.log(`Loading note for lecture: ${lectureId}`);
+
+    try {
+      const notes = await fetchNotes(userId, lectureId);
+
+      if (notes && notes.length > 0) {
+        // Use the first (and should be only) note
+        console.log(`Loaded note: ${notes[0].title} with id ${notes[0].id}`);
+        setCurrentNote(notes[0]);
+      } else {
+        console.log('No note found, creating default note for this lecture');
+        // Create a default note for this lecture
+        const defaultNote: Note = {
+          id: '', // Let the server generate an ID
+          content: JSON.stringify({
+            ops: [
+              { insert: `${selectedLecture?.title || 'New Note'}\n`, attributes: { header: 1 } },
+              { insert: 'Start taking notes here...\n' }
+            ]
+          }),
+          userId: userId,
+          lectureId: lectureId,
+          title: selectedLecture?.title || 'New Note'
+        };
+
+        // Save the note immediately
+        const savedNote = await saveNote(defaultNote);
+        console.log('Created default note:', savedNote);
+        setCurrentNote(savedNote);
+      }
+    } catch (error) {
+      console.error('Failed to load note for lecture:', error);
+
+      // Set a default note even on error, but don't try to save it
+      setCurrentNote({
+        id: '',
+        content: JSON.stringify({
+          ops: [
+            { insert: 'Error Loading Note\n', attributes: { header: 1 } },
+            { insert: 'There was an error loading your note. Please try again.\n' }
+          ]
+        }),
+        userId: userId,
+        lectureId: lectureId,
+        title: 'Error'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Save the current note
   const handleSaveNote = async (content: string) => {
+    if (!selectedLecture) {
+      console.error('Cannot save note: No lecture selected');
+      return;
+    }
+
     setLoading(true);
     try {
-      const updatedNote = { ...currentNote, content, userId };
+      const updatedNote = {
+        ...currentNote,
+        content,
+        userId,
+        lectureId: selectedLecture._id
+      };
+
+      console.log('Saving note:', updatedNote);
       const savedNote = await saveNote(updatedNote);
       setCurrentNote(savedNote);
-      console.log('Note saved successfully');
+      console.log('Note saved successfully:', savedNote);
     } catch (error) {
       console.error('Failed to save note:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handle lecture selection
+  const handleLectureSelect = (lecture: Lecture) => {
+    setSelectedLecture(lecture);
   };
 
   // Toggle suggestion panel visibility
@@ -111,13 +185,6 @@ function App() {
     setUserIdInput(e.target.value);
   };
 
-  const applyUserId = () => {
-    if (userIdInput) {
-      localStorage.setItem('sphene_user_id', userIdInput);
-      window.location.reload(); // Reload to apply the new user ID
-    }
-  };
-
   // Quick user switcher - for testing
   const quickSwitchUser = (testUserId: string) => {
     localStorage.setItem('sphene_user_id', testUserId);
@@ -126,7 +193,10 @@ function App() {
 
   return (
     <div className="app-container">
-      <Header title={`Collaborative Notes (${userId})`} loading={loading} />
+      <Header
+        title={`${selectedLecture?.title || 'Loading...'} (${userId})`}
+        loading={loading}
+      />
 
       {/* User ID test controls (for development only) */}
       <div className="user-controls" style={{ padding: '8px', textAlign: 'center' }}>
@@ -160,7 +230,7 @@ function App() {
             <input
               type="text"
               value={userIdInput}
-              onChange={(e) => setUserIdInput(e.target.value)}
+              onChange={handleUserIdChange}
               placeholder="Enter custom user ID"
               style={{ padding: '4px', marginRight: '8px', width: '180px' }}
             />
@@ -181,22 +251,38 @@ function App() {
       </div>
 
       <div className="main-content">
-        {/* Editor section - adjust width based on suggestion panel visibility */}
-        <div className={`editor-section ${showSuggestions ? 'with-suggestions' : ''}`}>
-          <TextEditor
-            ref={editorRef}
-            content={currentNote.content}
-            onSave={handleSaveNote}
-            onToggleSuggestions={toggleSuggestions}
-            showSuggestions={showSuggestions}
+        {/* Sidebar with lecture selector */}
+        <div className="sidebar">
+          <LectureSelector
+            userId={userId}
+            selectedLecture={selectedLecture}
+            onLectureSelect={handleLectureSelect}
           />
         </div>
 
+        {/* Editor section - adjust width based on suggestion panel visibility */}
+        <div className={`editor-section ${showSuggestions ? 'with-suggestions' : ''}`}>
+          {selectedLecture ? (
+            <TextEditor
+              ref={editorRef}
+              content={currentNote.content}
+              onSave={handleSaveNote}
+              onToggleSuggestions={toggleSuggestions}
+              showSuggestions={showSuggestions}
+            />
+          ) : (
+            <div className="loading-placeholder">
+              Select or create a lecture to start taking notes
+            </div>
+          )}
+        </div>
+
         {/* Side panel for suggestions */}
-        {showSuggestions && (
+        {showSuggestions && selectedLecture && (
           <div className="suggestions-section">
             <SuggestionPanel
               noteId={currentNote.id}
+              lectureId={selectedLecture._id} // Pass the current lecture ID
               quillRef={editorRef}
               visible={true}
             />

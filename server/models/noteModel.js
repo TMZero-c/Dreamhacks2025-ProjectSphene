@@ -19,6 +19,11 @@ const noteSchema = new mongoose.Schema({
         required: true,
         ref: 'User'
     },
+    lectureId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Lecture',
+        required: true
+    },
     topic: {
         type: String,
         default: 'general'
@@ -26,6 +31,9 @@ const noteSchema = new mongoose.Schema({
 }, {
     timestamps: true // Automatically add createdAt and updatedAt fields
 });
+
+// Create compound UNIQUE index for user+lecture to ensure one note per user per lecture
+noteSchema.index({ userId: 1, lectureId: 1 }, { unique: true });
 
 const Note = mongoose.model('Note', noteSchema);
 
