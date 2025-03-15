@@ -1,0 +1,78 @@
+/* Header Styles */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    background-color: var(--primary);
+    color: white;
+    width: 100%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    max-width: 1280px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 0 8px;
+}
+
+@media (min-width: 640px) {
+    .header {
+        padding: 20px 24px;
+    }
+
+    .header-content {
+        gap: 24px;
+        padding: 0 16px;
+    }
+}
+
+.header-title {
+    font-size: 1.25rem;
+    font-weight: bold;
+}
+
+@media (min-width: 768px) {
+    .header-title {
+        font-size: 1.75rem;
+    }
+}
+
+.processing-indicator {
+    padding: 8px 12px;
+    font-size: 0.75rem;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+@media (min-width: 640px) {
+    .processing-indicator {
+        padding: 10px 20px;
+        font-size: 0.875rem;
+    }
+}
+
+.user-button {
+    margin-left: auto;
+    background-color: var(--secondary);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+@media (min-width: 640px) {
+    .user-button {
+        padding: 10px 24px;
+    }
+}
+
+.user-button:hover {
+    background-color: #697a7e;
+}

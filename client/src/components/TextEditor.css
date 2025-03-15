@@ -1,0 +1,233 @@
+/* Editor Styles */
+.editor-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.editor-header {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 16px;
+    border-bottom: 1px solid rgba(122, 139, 143, 0.2);
+    gap: 12px;
+}
+
+@media (min-width: 768px) {
+    .editor-header {
+        flex-direction: row;
+        align-items: center;
+        padding: 24px;
+        gap: 16px;
+    }
+}
+
+.editor-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--secondary);
+    padding-left: 8px;
+}
+
+@media (min-width: 768px) {
+    .editor-title {
+        font-size: 1.25rem;
+    }
+}
+
+.editor-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+}
+
+@media (min-width: 768px) {
+    .editor-controls {
+        width: auto;
+        gap: 16px;
+    }
+}
+
+.save-status {
+    font-size: 0.75rem;
+    padding: 6px 12px;
+    border-radius: 9999px;
+    white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+    .save-status {
+        font-size: 0.875rem;
+        padding: 8px 16px;
+    }
+}
+
+.save-status.saved {
+    background-color: rgba(121, 204, 178, 0.1);
+    color: var(--primary);
+}
+
+.save-status.unsaved {
+    background-color: rgba(251, 191, 36, 0.1);
+    color: #d97706;
+}
+
+.save-status.saving {
+    background-color: rgba(122, 139, 143, 0.1);
+    color: var(--secondary);
+}
+
+.control-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+@media (min-width: 480px) {
+    .control-buttons {
+        flex-direction: row;
+        gap: 12px;
+    }
+}
+
+@media (min-width: 768px) {
+    .control-buttons {
+        margin-left: 0;
+        width: auto;
+        gap: 16px;
+    }
+}
+
+.toggle-button,
+.save-button {
+    padding: 8px 16px;
+    border-radius: 4px;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 0.875rem;
+    width: 100%;
+    text-align: center;
+}
+
+@media (min-width: 480px) {
+
+    .toggle-button,
+    .save-button {
+        width: auto;
+        padding: 10px 20px;
+    }
+}
+
+@media (min-width: 768px) {
+
+    .toggle-button,
+    .save-button {
+        padding: 12px 24px;
+    }
+}
+
+.toggle-button.active {
+    background-color: var(--secondary);
+}
+
+.toggle-button.active:hover {
+    background-color: #697a7e;
+}
+
+.toggle-button.inactive {
+    background-color: var(--primary);
+}
+
+.toggle-button.inactive:hover {
+    background-color: #68b9a1;
+}
+
+.save-button.enabled {
+    background-color: var(--primary);
+}
+
+.save-button.enabled:hover {
+    background-color: #68b9a1;
+}
+
+.save-button.disabled {
+    background-color: #d1d5db;
+    cursor: not-allowed;
+}
+
+.quill-wrapper {
+    height: calc(100vh - 220px);
+    padding: 4px;
+}
+
+@media (max-height: 600px) {
+    .quill-wrapper {
+        height: calc(100vh - 180px);
+    }
+}
+
+/* Quill editor specific styles */
+.quill-wrapper .ql-toolbar {
+    background-color: #f8f7f1;
+    border-color: #e2e0d3;
+    border-radius: 0.25rem 0.25rem 0 0;
+    padding: 0.75rem !important;
+}
+
+@media (min-width: 768px) {
+    .quill-wrapper .ql-toolbar {
+        padding: 1rem !important;
+    }
+}
+
+.quill-wrapper .ql-container {
+    border-color: #e2e0d3;
+    border-radius: 0 0 0.25rem 0.25rem;
+    background-color: white;
+    font-family: inherit;
+}
+
+.quill-wrapper .ql-editor {
+    min-height: 30vh;
+    padding: 1rem !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+        Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    color: var(--secondary);
+    font-size: 1rem;
+}
+
+@media (min-width: 768px) {
+    .quill-wrapper .ql-editor {
+        min-height: 40vh;
+        padding: 1.5rem !important;
+        font-size: 1.05rem;
+    }
+}
+
+.quill-wrapper .ql-snow .ql-stroke {
+    stroke: var(--secondary);
+}
+
+.quill-wrapper .ql-snow .ql-fill {
+    fill: var(--secondary);
+}
+
+.quill-wrapper .ql-snow.ql-toolbar button:hover .ql-stroke,
+.quill-wrapper .ql-snow.ql-toolbar button.ql-active .ql-stroke {
+    stroke: var(--primary);
+}
+
+.quill-wrapper .ql-snow.ql-toolbar button:hover .ql-fill,
+.quill-wrapper .ql-snow.ql-toolbar button.ql-active .ql-fill {
+    fill: var(--primary);
+}

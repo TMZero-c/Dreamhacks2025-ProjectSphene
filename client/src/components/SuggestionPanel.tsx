@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { fetchSuggestions, respondToSuggestion } from '../services/api';
 import SuggestionItem from './SuggestionItem';
 import { Suggestion } from '../types/types';
+import './SuggestionPanel.css';
 
 interface SuggestionPanelProps {
     noteId: string;

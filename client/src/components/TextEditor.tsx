@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, forwardRef, useImperativeHandle } from 're
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import { Delta as QuillDelta } from 'quill';
+import './TextEditor.css';
 
 interface TextEditorProps {
     content: string;

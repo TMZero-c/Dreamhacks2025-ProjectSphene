@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Suggestion } from '../types/types';
+import './SuggestionItem.css';
 
 interface SuggestionItemProps {
     suggestion: Suggestion;
