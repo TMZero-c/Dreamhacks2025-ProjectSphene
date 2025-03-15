@@ -1,0 +1,10 @@
+import { MongoClient } from 'mongodb';
+
+const client = new MongoClient(process.env.MONGO_URI);
+
+export default async function handler(req, res) {
+  await client.connect();
+  const db = client.db('test');
+  const data = await db.collection('example').find().toArray();
+  res.status(200).json(data);
+}

@@ -1,7 +1,7 @@
 // OpenAI configuration
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
-const { OpenAI } = require('openai');
+const { OpenAI } = require('openai/index.mjs');
 
 const apiKey = process.env.OPENAI_API_KEY;
 console.log(`OpenAI API Key ${apiKey ? 'is set' : 'is NOT set'}`);
