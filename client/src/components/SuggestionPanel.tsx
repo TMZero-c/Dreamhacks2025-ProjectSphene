@@ -193,6 +193,13 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
                 range.index += 2;
             }
 
+            // Ensure the suggestion content is a valid Quill Delta
+            if (!suggestion.content || !suggestion.content.ops || !Array.isArray(suggestion.content.ops)) {
+                console.error('Invalid suggestion content format:', suggestion.content);
+                setError('This suggestion has invalid formatting and cannot be applied.');
+                return;
+            }
+
             // Insert the suggestion content at the cursor position or end
             editor.updateContents({
                 ops: [
@@ -217,6 +224,7 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
             setSuggestions(prevSuggestions => prevSuggestions.filter(s => s._id !== suggestion._id));
         } catch (error) {
             console.error('Error applying suggestion:', error);
+            setError('Failed to apply suggestion. Please try again.');
         }
     };
 

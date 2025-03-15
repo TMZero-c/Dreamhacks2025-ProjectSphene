@@ -39,9 +39,18 @@ const SuggestionItem: React.FC<SuggestionItemProps> = ({
                 return 'No content available';
             }
 
-            // Extract text from Delta ops
+            // Extract text from Delta ops while preserving basic structure
             return suggestion.content.ops
-                .map((op: any) => typeof op.insert === 'string' ? op.insert : '')
+                .map((op: any) => {
+                    if (typeof op.insert !== 'string') return '';
+
+                    // If it's a heading, add some emphasis
+                    if (op.attributes && op.attributes.header) {
+                        return op.insert.trim();
+                    }
+
+                    return op.insert;
+                })
                 .join('')
                 .substring(0, 100) + (
                     suggestion.content.ops.join('').length > 100 ? '...' : ''
