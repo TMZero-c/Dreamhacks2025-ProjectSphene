@@ -5,14 +5,17 @@ const MOCK_NOTES: Note[] = [
     {
         id: '1',
         title: 'SPHEEENEE',
-        content: '<h2>Bee My Honey</h2><p>asddhasjkdhakjdsyhiusayrcwebyaeciawynerudoxewybseiuaorctfbwreyutyvbeuisworynfgiubodfgxysrucygfi d<p/>',
+        content: JSON.stringify({
+            ops: [
+                { insert: 'Bee My Honey', attributes: { header: 2 } },
+                { insert: '\nasddhasjkdhakjdsyhiusayrcwebyaeciawynerudoxewybseiuaorctfbwreyutyvbeuisworynfgiubodfgxysrucygfi d\n' }
+            ]
+        }),
         userId: 'current-user',
         createdAt: new Date(),
         updatedAt: new Date()
     }
 ];
-
-
 
 // Fetch notes for a specific user
 export async function fetchNotes(userId: string): Promise<Note[]> {
@@ -23,7 +26,7 @@ export async function fetchNotes(userId: string): Promise<Note[]> {
 
 // Save a note
 export async function saveNote(note: Note): Promise<Note> {
-  
+
     await new Promise(resolve => setTimeout(resolve, 800));
 
     const updatedNote = {
