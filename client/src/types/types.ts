@@ -3,6 +3,7 @@ export interface Note {
     title: string;
     content: string;
     userId: string;
+    lectureId: string;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -11,6 +12,17 @@ export interface User {
     id: string;
     name: string;
     email: string;
+}
+
+export interface Lecture {
+    _id: string;
+    title: string;
+    description: string;
+    code: string;
+    createdBy: string;
+    participants: string[];
+    createdAt: Date;
+    updatedAt: Date;
 }
 
 // Interface for AI-generated suggestions

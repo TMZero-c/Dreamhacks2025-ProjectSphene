@@ -1,21 +1,25 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchSuggestions, respondToSuggestion, triggerDocumentComparison } from '../services/api';
 import SuggestionItem from './SuggestionItem';
 import { Suggestion } from '../types/types';
 import './SuggestionPanel.css';
 
 interface SuggestionPanelProps {
-    noteId: string;
+    noteId?: string; // Make noteId optional
+    userId: string; // Add userId prop
+    lectureId: string; // Make lectureId required
     quillRef: React.RefObject<any>;
     visible: boolean;
 }
 
 const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
     noteId,
+    userId,
+    lectureId,
     quillRef,
     visible
 }) => {
-    console.log(`SuggestionPanel rendering for noteId: ${noteId}`);
+    console.log(`SuggestionPanel rendering for lecture: ${lectureId}, user: ${userId}`);
 
     const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
     const [loading, setLoading] = useState(false);
@@ -24,10 +28,22 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
     const hasFetched = useRef(false);
     const hasTriggeredGeneration = useRef(false);
 
-    // Fetch suggestions when the panel becomes visible or noteId changes
+    // Add debouncing for button clicks
+    const [isGenerateButtonDisabled, setIsGenerateButtonDisabled] = useState(false);
+    const [isRefreshButtonDisabled, setIsRefreshButtonDisabled] = useState(false);
+
+    // Keep track of active operations to prevent race conditions
+    const activeOperation = useRef<string | null>(null);
+
+    // Only clear errors when explicitly dismissed by user
+    const clearError = () => {
+        setError(null);
+    };
+
+    // Fetch suggestions when the panel becomes visible or lectureId/noteId changes
     useEffect(() => {
-        if (visible && noteId) {
-            // Reset our reference flags when note changes
+        if (visible && (noteId || (lectureId && userId))) {
+            // Reset our reference flags when note or lecture changes
             if (hasFetched.current && hasTriggeredGeneration.current) {
                 hasFetched.current = false;
                 hasTriggeredGeneration.current = false;
@@ -36,11 +52,15 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
             if (!hasFetched.current) {
                 (async () => {
                     hasFetched.current = true;
-                    console.log(`Fetching suggestions for note ID: ${noteId}`);
+                    console.log(`Fetching suggestions for ${noteId ? `note: ${noteId}` : `lecture: ${lectureId}, user: ${userId}`}`);
                     setLoading(true);
                     try {
-                        const fetchedSuggestions = await fetchSuggestions(noteId);
-                        console.log(`Fetched ${fetchedSuggestions.length} suggestions:`, fetchedSuggestions);
+                        // Use either noteId or userId+lectureId to fetch suggestions
+                        const fetchedSuggestions = noteId
+                            ? await fetchSuggestions(noteId)
+                            : await fetchSuggestions(null, lectureId, userId);
+
+                        console.log(`Fetched ${fetchedSuggestions.length} suggestions`);
                         setSuggestions(fetchedSuggestions);
 
                         // If no suggestions found and we haven't triggered generation yet, do it automatically
@@ -57,50 +77,103 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
                 })();
             }
         }
-    }, [visible, noteId]);
+    }, [visible, noteId, lectureId, userId]);
 
-    // Reset guard when noteId changes so new suggestions can be fetched
+    // Reset guard when dependencies change
     useEffect(() => {
         hasFetched.current = false;
         hasTriggeredGeneration.current = false;
-    }, [noteId]);
+    }, [noteId, lectureId, userId]);
 
-    const loadSuggestions = async () => {
-        if (!noteId) return;
+    // Debounced function to fetch suggestions
+    const debouncedLoadSuggestions = useCallback(async () => {
+        if (activeOperation.current === 'loadSuggestions') return;
 
+        activeOperation.current = 'loadSuggestions';
+        setIsRefreshButtonDisabled(true);
         setLoading(true);
-        setError(null);
 
         try {
-            const data = await fetchSuggestions(noteId);
+            const data = noteId
+                ? await fetchSuggestions(noteId)
+                : await fetchSuggestions(null, lectureId, userId);
+
             setSuggestions(data);
+
+            // Only clear error on success
+            if (error && error.includes('load')) {
+                clearError();
+            }
         } catch (err) {
             console.error('Failed to load suggestions:', err);
             setError('Failed to load suggestions. Please try again.');
         } finally {
             setLoading(false);
+            activeOperation.current = null;
+
+            // Re-enable button after a short delay
+            setTimeout(() => {
+                setIsRefreshButtonDisabled(false);
+            }, 1000);
         }
+    }, [noteId, lectureId, userId, error]);
+
+    // Create a wrapper for the loadSuggestions function
+    const handleRefreshClick = () => {
+        if (isRefreshButtonDisabled || loading || generating) return;
+        debouncedLoadSuggestions();
     };
 
     // Generate new suggestions using AI
     const handleGenerateSuggestions = async () => {
-        if (!noteId || generating) return;
+        if (activeOperation.current === 'generateSuggestions') return;
 
+        // Don't clear previous errors automatically
+
+        // Validate the necessary IDs
+        if (!lectureId) {
+            setError('Cannot generate suggestions: Lecture ID is missing');
+            return;
+        }
+
+        activeOperation.current = 'generateSuggestions';
         hasTriggeredGeneration.current = true;
         setGenerating(true);
-        setError(null);
+        setIsGenerateButtonDisabled(true);
 
         try {
-            console.log(`Triggering document comparison for note ${noteId}`);
-            await triggerDocumentComparison(noteId);
+            console.log(`Triggering document comparison for lecture: ${lectureId}, user: ${userId}`);
 
-            // Reload suggestions after comparison is done
-            await loadSuggestions();
-        } catch (err) {
+            // Add timing information to help debug
+            const startTime = Date.now();
+
+            // Use the updated triggerDocumentComparison that can work with userId+lectureId
+            const result = await triggerDocumentComparison(noteId, lectureId, userId);
+
+            console.log(`Document comparison completed in ${Date.now() - startTime}ms, result:`, result);
+
+            if (result?.suggestions?.length === 0) {
+                setError('No suggestions were generated. You might need other users to take notes in this lecture first.');
+            } else {
+                // Only clear error on success
+                clearError();
+            }
+
+            // Wait a moment before reloading to ensure suggestions are saved
+            setTimeout(async () => {
+                await debouncedLoadSuggestions();
+            }, 1000);
+        } catch (err: any) {
             console.error('Failed to generate suggestions:', err);
-            setError('Failed to generate suggestions. Please try again.');
+            setError(`Failed to generate suggestions: ${err?.message || 'Unknown error'}`);
         } finally {
             setGenerating(false);
+            activeOperation.current = null;
+
+            // Re-enable button after a delay
+            setTimeout(() => {
+                setIsGenerateButtonDisabled(false);
+            }, 2000); // Longer delay for generate button to prevent rapid clicking
         }
     };
 
@@ -118,6 +191,13 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
             if (range.index > 0) {
                 editor.insertText(range.index, '\n\n');
                 range.index += 2;
+            }
+
+            // Ensure the suggestion content is a valid Quill Delta
+            if (!suggestion.content || !suggestion.content.ops || !Array.isArray(suggestion.content.ops)) {
+                console.error('Invalid suggestion content format:', suggestion.content);
+                setError('This suggestion has invalid formatting and cannot be applied.');
+                return;
             }
 
             // Insert the suggestion content at the cursor position or end
@@ -144,6 +224,7 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
             setSuggestions(prevSuggestions => prevSuggestions.filter(s => s._id !== suggestion._id));
         } catch (error) {
             console.error('Error applying suggestion:', error);
+            setError('Failed to apply suggestion. Please try again.');
         }
     };
 
@@ -166,15 +247,15 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
                 <div className="panel-actions">
                     <button
                         onClick={handleGenerateSuggestions}
-                        disabled={loading || generating}
-                        className="generate-button"
+                        disabled={loading || generating || isGenerateButtonDisabled}
+                        className={`generate-button ${isGenerateButtonDisabled ? 'disabled' : ''}`}
                     >
                         {generating ? 'Generating...' : 'Generate Suggestions'}
                     </button>
                     <button
-                        onClick={loadSuggestions}
-                        disabled={loading || generating}
-                        className="refresh-button"
+                        onClick={handleRefreshClick}
+                        disabled={loading || generating || isRefreshButtonDisabled}
+                        className={`refresh-button ${isRefreshButtonDisabled ? 'disabled' : ''}`}
                     >
                         {loading ? 'Loading...' : 'Refresh'}
                     </button>
@@ -184,6 +265,13 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
             {error && (
                 <div className="error-message">
                     {error}
+                    <button
+                        className="dismiss-error"
+                        onClick={clearError}
+                        aria-label="Dismiss error"
+                    >
+                        ×
+                    </button>
                 </div>
             )}
 

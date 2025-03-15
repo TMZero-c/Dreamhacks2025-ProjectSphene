@@ -1,12 +1,17 @@
 const Note = require('../models/noteModel');
 const mongoose = require('mongoose');
 
-// Get all notes for a specific user
+// Get the note for a specific user and lecture
 exports.getNotes = async (req, res) => {
     try {
-        const { userId } = req.params;
+        const { userId, lectureId } = req.params;
 
-        const notes = await Note.find({ userId })
+        const query = { userId };
+        if (lectureId) {
+            query.lectureId = lectureId;
+        }
+
+        const notes = await Note.find(query)
             .sort({ updatedAt: -1 }) // Sort by most recently updated
             .exec();
 
@@ -44,65 +49,93 @@ exports.getNote = async (req, res) => {
     }
 };
 
-// Create a new note
+// Create a new note or update if exists (upsert)
 exports.createNote = async (req, res) => {
     try {
-        const { id, title, content, userId, topic } = req.body;
+        const { id, title, content, userId, topic, lectureId } = req.body;
 
+        if (!lectureId) {
+            return res.status(400).json({ message: 'Lecture ID is required' });
+        }
+
+        // Check if note already exists for this user and lecture
+        let existingNote = await Note.findOne({ userId, lectureId });
+
+        if (existingNote) {
+            // Update the existing note
+            existingNote.title = title || existingNote.title;
+            existingNote.content = content;
+            if (topic) existingNote.topic = topic;
+
+            const savedNote = await existingNote.save();
+            return res.status(200).json(savedNote);
+        }
+
+        // Create a new note if none exists
         const newNote = new Note({
             id, // Store string ID if provided
             title,
             content,
             userId,
+            lectureId,
             topic: topic || 'general'
         });
 
         const savedNote = await newNote.save();
         res.status(201).json(savedNote);
     } catch (error) {
-        console.error('Error creating note:', error);
-        res.status(500).json({ message: 'Failed to create note', error: error.message });
+        console.error('Error creating/updating note:', error);
+        res.status(500).json({ message: 'Failed to save note', error: error.message });
     }
 };
 
-// Update an existing note
+// Update an existing note - using upsert to ensure we have one note per lecture
 exports.updateNote = async (req, res) => {
     try {
         const { id } = req.params;
-        const { title, content, topic } = req.body;
-        let updatedNote;
+        const { title, content, topic, userId, lectureId } = req.body;
 
-        // Try to update by MongoDB ObjectId if valid
+        if (!lectureId) {
+            return res.status(400).json({ message: 'Lecture ID is required' });
+        }
+
+        // Try to find the note by ID first
+        let note;
         if (mongoose.Types.ObjectId.isValid(id)) {
-            updatedNote = await Note.findByIdAndUpdate(
-                id,
-                {
-                    title,
-                    content,
-                    ...(topic && { topic })
-                },
-                { new: true }
-            );
+            note = await Note.findById(id);
         }
 
-        // If not found, try updating by string ID
-        if (!updatedNote) {
-            updatedNote = await Note.findOneAndUpdate(
-                { id: id },
-                {
-                    title,
-                    content,
-                    ...(topic && { topic })
-                },
-                { new: true }
-            );
+        if (!note && id) {
+            // Try to find by string ID
+            note = await Note.findOne({ id });
         }
 
-        if (!updatedNote) {
-            return res.status(404).json({ message: 'Note not found' });
+        // If still not found, look for a note with this user and lecture
+        if (!note) {
+            note = await Note.findOne({ userId, lectureId });
         }
 
-        res.status(200).json(updatedNote);
+        if (note) {
+            // Update existing note
+            note.title = title || note.title;
+            note.content = content || note.content;
+            if (topic) note.topic = topic;
+
+            const updatedNote = await note.save();
+            return res.status(200).json(updatedNote);
+        } else {
+            // Create a new note if none exists
+            const newNote = new Note({
+                title,
+                content,
+                userId,
+                lectureId,
+                topic: topic || 'general'
+            });
+
+            const savedNote = await newNote.save();
+            return res.status(201).json(savedNote);
+        }
     } catch (error) {
         console.error('Error updating note:', error);
         res.status(500).json({ message: 'Failed to update note', error: error.message });
