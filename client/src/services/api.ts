@@ -289,27 +289,30 @@ export async function fetchSuggestions(noteId: string): Promise<Suggestion[]> {
 // Accept or dismiss a suggestion
 export async function respondToSuggestion(suggestionId: string, action: 'accept' | 'dismiss'): Promise<void> {
     if (USE_MOCK_DATA) {
-        // Simulate API delay
         await new Promise(resolve => setTimeout(resolve, 400));
-        console.log(`Suggestion ${suggestionId} was ${action}ed`);
-    } else {
-        try {
-            const response = await fetch(`${API_URL}/suggestions/${suggestionId}/respond`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ action })
-            });
+        console.log(`Mock: Suggestion ${suggestionId} was ${action}ed`);
+        return;
+    }
 
-            if (!response.ok) {
-                throw new Error(`Error: ${response.status}`);
-            }
+    console.log(`Sending ${action} request for suggestion: ${suggestionId}`);
 
-            console.log(`Suggestion ${suggestionId} was ${action}ed`);
-        } catch (error) {
-            console.error(`Error ${action}ing suggestion:`, error);
-            throw error;
+    try {
+        const response = await fetch(`${API_URL}/suggestions/${suggestionId}/respond`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ action })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(`Server responded with ${response.status}: ${errorData.message || response.statusText}`);
         }
+
+        console.log(`Successfully ${action}ed suggestion ${suggestionId}`);
+    } catch (error) {
+        console.error(`Error ${action}ing suggestion:`, error);
+        throw error;
     }
 }

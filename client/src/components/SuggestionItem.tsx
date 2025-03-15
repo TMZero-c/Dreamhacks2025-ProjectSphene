@@ -14,6 +14,23 @@ const SuggestionItem: React.FC<SuggestionItemProps> = ({
     onDismiss
 }) => {
     const [expanded, setExpanded] = useState(false);
+    const [isRemoving, setIsRemoving] = useState(false);
+
+    const handleDismiss = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setIsRemoving(true);
+        // Add small delay before actual dismissal to allow animation
+        if (suggestion._id) {
+            setTimeout(() => onDismiss(suggestion._id!), 300);
+        }
+    };
+
+    const handleApply = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setIsRemoving(true);
+        // Add small delay before actual application to allow animation
+        setTimeout(() => onApply(suggestion), 300);
+    };
 
     // Format the suggestion content for preview (extract plain text)
     const previewText = (): string => {
@@ -60,7 +77,7 @@ const SuggestionItem: React.FC<SuggestionItemProps> = ({
     };
 
     return (
-        <div className={`suggestion-item ${expanded ? 'expanded' : ''}`}>
+        <div className={`suggestion-item ${expanded ? 'expanded' : ''} ${isRemoving ? 'removing' : ''}`}>
             <div
                 className="suggestion-header"
                 onClick={() => setExpanded(!expanded)}
@@ -86,19 +103,13 @@ const SuggestionItem: React.FC<SuggestionItemProps> = ({
                     <div className="suggestion-actions">
                         <button
                             className="dismiss-button"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onDismiss(suggestion.id);
-                            }}
+                            onClick={handleDismiss}
                         >
                             Dismiss
                         </button>
                         <button
                             className="apply-button"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onApply(suggestion);
-                            }}
+                            onClick={handleApply}
                         >
                             Apply
                         </button>

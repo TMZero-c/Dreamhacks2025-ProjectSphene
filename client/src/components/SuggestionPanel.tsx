@@ -137,10 +137,11 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
             }
 
             // Mark the suggestion as accepted in the backend
-            await respondToSuggestion(suggestion.id, 'accept');
+            if (!suggestion._id) return;
+            await respondToSuggestion(suggestion._id, 'accept');
 
-            // Remove the suggestion from the list
-            setSuggestions(suggestions.filter(s => s.id !== suggestion.id));
+            // Remove the suggestion from the list using functional state update
+            setSuggestions(prevSuggestions => prevSuggestions.filter(s => s._id !== suggestion._id));
         } catch (error) {
             console.error('Error applying suggestion:', error);
         }
@@ -149,7 +150,7 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
     // Dismiss a suggestion
     const handleDismissSuggestion = async (suggestionId: string) => {
         await respondToSuggestion(suggestionId, 'dismiss');
-        setSuggestions(suggestions.filter(s => s.id !== suggestionId));
+        setSuggestions(prevSuggestions => prevSuggestions.filter(s => s._id !== suggestionId));
     };
 
     if (suggestions.length === 0 && !loading && !error) {

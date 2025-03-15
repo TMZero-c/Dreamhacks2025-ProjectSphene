@@ -28,6 +28,12 @@ exports.respondToSuggestion = async (req, res) => {
         const { id } = req.params;
         const { action } = req.body;
 
+        console.log(`Responding to suggestion ${id} with action: ${action}`);
+
+        if (!id) {
+            return res.status(400).json({ message: 'Suggestion ID is required' });
+        }
+
         if (!['accept', 'dismiss'].includes(action)) {
             return res.status(400).json({ message: 'Invalid action. Must be either "accept" or "dismiss"' });
         }
@@ -41,9 +47,11 @@ exports.respondToSuggestion = async (req, res) => {
         );
 
         if (!suggestion) {
+            console.log(`Suggestion not found with ID: ${id}`);
             return res.status(404).json({ message: 'Suggestion not found' });
         }
 
+        console.log(`Successfully updated suggestion ${id} to status: ${status}`);
         res.status(200).json(suggestion);
     } catch (error) {
         console.error('Error updating suggestion status:', error);

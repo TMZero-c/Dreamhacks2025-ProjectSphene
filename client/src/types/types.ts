@@ -16,6 +16,7 @@ export interface User {
 // Interface for AI-generated suggestions
 export interface Suggestion {
     id: string;
+    _id?: string; // Add the _id field here
     title: string;
     content: any; // Quill Delta object
     noteId: string;
