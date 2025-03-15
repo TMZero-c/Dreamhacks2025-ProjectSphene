@@ -126,7 +126,7 @@ function App() {
 
   return (
     <div className="app-container">
-      <Header title={`Collaborative Notes (${userId})`} loading={loading} />
+      <Header title={`Project SPHENE: It was revealed to me in a dream (${userId})`} loading={loading} />
 
       {/* User ID test controls (for development only) */}
       <div className="user-controls" style={{ padding: '8px', textAlign: 'center' }}>
