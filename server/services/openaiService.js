@@ -2,18 +2,28 @@ const openai = require('../config/openaiConfig');
 
 /**
  * Generate suggestions based on comparing notes
- * 
- * @param {Object} targetNote - The note to generate suggestions for
- * @param {Array} otherNotes - Other notes to compare with
- * @returns {Array} An array of suggestion objects
  */
 exports.generateSuggestions = async (targetNote, otherNotes) => {
-    console.log(`Generating suggestions for note ID: ${targetNote.id || targetNote._id}`);
+    console.log(`Generating suggestions for note ID: ${targetNote._id}, title: "${targetNote.title}"`);
     console.log(`Comparing with ${otherNotes.length} other notes`);
 
     if (!targetNote.content) {
         console.warn('Target note has no content');
         return [];
+    }
+
+    // Parse the content if needed
+    let targetContent = targetNote.content;
+    try {
+        // Check if the content is JSON and needs parsing
+        if (typeof targetContent === 'string' &&
+            (targetContent.startsWith('{') || targetContent.startsWith('['))) {
+            console.log('Parsing target note content as JSON');
+            targetContent = JSON.parse(targetContent);
+        }
+    } catch (error) {
+        console.error('Error parsing target note content:', error);
+        // Continue with the original content
     }
 
     const suggestions = [];
@@ -29,47 +39,63 @@ exports.generateSuggestions = async (targetNote, otherNotes) => {
             console.log(`Comparing with note from user: ${sourceNote.userId}`);
 
             // Create a prompt for OpenAI to compare documents
-            const prompt = createComparisonPrompt(targetNote.content, sourceNote.content);
+            const prompt = createComparisonPrompt(
+                targetNote.content,
+                sourceNote.content,
+                targetNote.title,
+                sourceNote.title
+            );
 
             // Call OpenAI API with the prompt
             console.log('Calling OpenAI API...');
-            const response = await openai.chat.completions.create({
-                model: "gpt-4",
-                messages: [
-                    {
-                        role: "system",
-                        content: `You are an assistant that identifies key information present in Document B 
-                      but missing from Document A. Generate concise suggestions for improving Document A.
-                      Each suggestion should include a title and content formatted as a Quill Delta object.`
-                    },
-                    { role: "user", content: prompt }
-                ],
-                temperature: 0.7,
-                max_tokens: 1500 // allows full JSON response
-            });
+            try {
+                const response = await openai.chat.completions.create({
+                    model: "gpt-4",
+                    messages: [
+                        {
+                            role: "system",
+                            content: `You are an assistant that identifies key information present in Document B 
+                          but missing from Document A. Generate concise suggestions for improving Document A.
+                          Each suggestion should include a title and content formatted as a Quill Delta object.`
+                        },
+                        { role: "user", content: prompt }
+                    ],
+                    temperature: 0.7,
+                    max_tokens: 1500 // allows full JSON response
+                });
 
-            // Check for valid response
-            const messageContent = response.choices && response.choices[0] && response.choices[0].message && response.choices[0].message.content;
-            if (!messageContent) {
-                console.warn('No message content received from OpenAI');
-                continue;
+                // Check for valid response
+                const messageContent = response.choices &&
+                    response.choices[0] &&
+                    response.choices[0].message &&
+                    response.choices[0].message.content;
+
+                if (!messageContent) {
+                    console.warn('No message content received from OpenAI');
+                    continue;
+                }
+
+                console.log('Received response from OpenAI:',
+                    messageContent.substring(0, 100) + '...');
+
+                // Parse the response and create suggestion objects
+                const noteId = targetNote._id.toString();
+                const suggestionsFromResponse = parseSuggestionsFromResponse(
+                    messageContent,
+                    noteId,
+                    sourceNote.userId
+                );
+
+                console.log(`Generated ${suggestionsFromResponse.length} suggestions from this comparison`);
+                suggestions.push(...suggestionsFromResponse);
+
+            } catch (apiError) {
+                console.error('OpenAI API error:', apiError);
+                console.log('Continuing with other notes despite API error');
             }
 
-            console.log('Received response from OpenAI:', messageContent.substring(0, 100) + '...');
-
-            // Parse the response and create suggestion objects
-            const noteId = targetNote.id || targetNote._id.toString();
-            const suggestionsFromResponse = parseSuggestionsFromResponse(
-                messageContent,
-                noteId,
-                sourceNote.userId
-            );
-
-            console.log(`Generated ${suggestionsFromResponse.length} suggestions from this comparison`);
-            suggestions.push(...suggestionsFromResponse);
-
         } catch (error) {
-            console.error('Error generating suggestions with OpenAI:', error);
+            console.error('Error processing source note:', error);
             // Continue with other notes even if one comparison fails
         }
     }
@@ -81,18 +107,20 @@ exports.generateSuggestions = async (targetNote, otherNotes) => {
 /**
  * Create a prompt for the OpenAI API to compare two documents
  */
-function createComparisonPrompt(documentA, documentB) {
+function createComparisonPrompt(documentA, documentB, titleA = '', titleB = '') {
     // Parse JSON content if necessary
     let contentA = documentA;
     let contentB = documentB;
 
     try {
-        if (typeof documentA === 'string' && documentA.startsWith('{')) {
+        if (typeof documentA === 'string' &&
+            (documentA.startsWith('{') || documentA.startsWith('['))) {
             const parsedA = JSON.parse(documentA);
             contentA = extractTextFromQuillDelta(parsedA);
         }
 
-        if (typeof documentB === 'string' && documentB.startsWith('{')) {
+        if (typeof documentB === 'string' &&
+            (documentB.startsWith('{') || documentB.startsWith('['))) {
             const parsedB = JSON.parse(documentB);
             contentB = extractTextFromQuillDelta(parsedB);
         }
@@ -101,7 +129,11 @@ function createComparisonPrompt(documentA, documentB) {
         // Continue with original content if parsing fails
     }
 
-    return `Compare the following two documents:
+    // Use titles in the prompt if available
+    const titleText = titleA && titleB ?
+        `Document A Title: "${titleA}"\nDocument B Title: "${titleB}"\n\n` : '';
+
+    return `${titleText}Compare the following two documents:
   
 Document A (Target document that needs improvement):
 "${contentA}"

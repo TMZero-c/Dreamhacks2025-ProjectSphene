@@ -119,60 +119,85 @@ export async function saveNote(note: Note): Promise<Note> {
 
 // Trigger document comparison via the backend
 export async function triggerDocumentComparison(
-    noteId: string,
-    lectureId?: string
+    noteId?: string,
+    lectureId?: string,
+    userId?: string
 ): Promise<any> {
-    console.log(`Triggering document comparison for note: ${noteId} in lecture: ${lectureId || 'default'}`);
-
+    console.log(`Triggering document comparison: ${noteId ? `noteId=${noteId}` : `lectureId=${lectureId}, userId=${userId}`}`);
 
     try {
-        console.log(`Sending request to ${API_URL}/suggestions/compare with data:`, { noteId, lectureId });
+        if (!noteId && (!lectureId || !userId)) {
+            throw new Error('Either noteId or both lectureId and userId are required');
+        }
+
+        console.log(`Sending request to ${API_URL}/suggestions/compare`);
         const response = await fetch(`${API_URL}/suggestions/compare`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ noteId, lectureId })
+            body: JSON.stringify({ noteId, lectureId, userId })
         });
 
-        const data = await response.json();
+        // Log the raw response for debugging
+        const responseText = await response.text();
+        console.log('Raw server response:', responseText);
+
+        // Parse the response if possible
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (e) {
+            console.error('Error parsing response:', e);
+            throw new Error('Invalid response from server');
+        }
 
         if (!response.ok) {
             console.error('Error response from server:', data);
-            throw new Error(data.message || `Server responded with ${response.status}`);
+            throw new Error(data?.message || `Server responded with ${response.status}`);
         }
 
-        console.log(`Triggered comparison for note: ${noteId}, response:`, data);
+        console.log(`Comparison complete, response:`, data);
         return data;
     } catch (error) {
         console.error('Error triggering document comparison:', error);
         throw error;
     }
-
 }
 
 /**
  * Fetches AI-generated suggestions for a specific note
  */
-export async function fetchSuggestions(noteId: string): Promise<Suggestion[]> {
-    console.log(`Fetching suggestions for note ID: ${noteId}`);
-
+export async function fetchSuggestions(
+    noteId?: string | null,
+    lectureId?: string,
+    userId?: string
+): Promise<Suggestion[]> {
+    console.log(`Fetching suggestions: ${noteId ? `noteId=${noteId}` : `lectureId=${lectureId}, userId=${userId}`}`);
 
     try {
-        const response = await fetch(`${API_URL}/suggestions/note/${noteId}`);
+        let endpoint;
+        if (noteId) {
+            endpoint = `${API_URL}/suggestions/note/${noteId}`;
+        } else if (lectureId && userId) {
+            endpoint = `${API_URL}/suggestions/lecture/${lectureId}/user/${userId}`;
+        } else {
+            throw new Error('Either noteId or both lectureId and userId are required');
+        }
+
+        const response = await fetch(endpoint);
 
         if (!response.ok) {
             throw new Error(`Error: ${response.status}`);
         }
 
         const data = await response.json();
-        console.log(`Fetched ${data.length} suggestions from API for note ${noteId}`);
+        console.log(`Fetched ${data.length} suggestions from API`);
         return data;
     } catch (error) {
         console.error('Error fetching suggestions:', error);
         return [];
     }
-
 }
 
 // Accept or dismiss a suggestion

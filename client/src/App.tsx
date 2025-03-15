@@ -281,8 +281,9 @@ function App() {
         {showSuggestions && selectedLecture && (
           <div className="suggestions-section">
             <SuggestionPanel
-              noteId={currentNote.id}
-              lectureId={selectedLecture._id} // Pass the current lecture ID
+              noteId={currentNote.id} // Keep this for backward compatibility
+              userId={userId} // Add userId
+              lectureId={selectedLecture._id}
               quillRef={editorRef}
               visible={true}
             />

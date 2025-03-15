@@ -5,19 +5,21 @@ import { Suggestion } from '../types/types';
 import './SuggestionPanel.css';
 
 interface SuggestionPanelProps {
-    noteId: string;
-    lectureId?: string; // Add lectureId prop
+    noteId?: string; // Make noteId optional
+    userId: string; // Add userId prop
+    lectureId: string; // Make lectureId required
     quillRef: React.RefObject<any>;
     visible: boolean;
 }
 
 const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
     noteId,
+    userId,
     lectureId,
     quillRef,
     visible
 }) => {
-    console.log(`SuggestionPanel rendering for noteId: ${noteId}, lectureId: ${lectureId}`);
+    console.log(`SuggestionPanel rendering for lecture: ${lectureId}, user: ${userId}`);
 
     const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
     const [loading, setLoading] = useState(false);
@@ -26,10 +28,10 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
     const hasFetched = useRef(false);
     const hasTriggeredGeneration = useRef(false);
 
-    // Fetch suggestions when the panel becomes visible or noteId changes
+    // Fetch suggestions when the panel becomes visible or lectureId/noteId changes
     useEffect(() => {
-        if (visible && noteId) {
-            // Reset our reference flags when note changes
+        if (visible && (noteId || (lectureId && userId))) {
+            // Reset our reference flags when note or lecture changes
             if (hasFetched.current && hasTriggeredGeneration.current) {
                 hasFetched.current = false;
                 hasTriggeredGeneration.current = false;
@@ -38,11 +40,15 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
             if (!hasFetched.current) {
                 (async () => {
                     hasFetched.current = true;
-                    console.log(`Fetching suggestions for note ID: ${noteId}`);
+                    console.log(`Fetching suggestions for ${noteId ? `note: ${noteId}` : `lecture: ${lectureId}, user: ${userId}`}`);
                     setLoading(true);
                     try {
-                        const fetchedSuggestions = await fetchSuggestions(noteId);
-                        console.log(`Fetched ${fetchedSuggestions.length} suggestions:`, fetchedSuggestions);
+                        // Use either noteId or userId+lectureId to fetch suggestions
+                        const fetchedSuggestions = noteId
+                            ? await fetchSuggestions(noteId)
+                            : await fetchSuggestions(null, lectureId, userId);
+
+                        console.log(`Fetched ${fetchedSuggestions.length} suggestions`);
                         setSuggestions(fetchedSuggestions);
 
                         // If no suggestions found and we haven't triggered generation yet, do it automatically
@@ -59,22 +65,23 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
                 })();
             }
         }
-    }, [visible, noteId]);
+    }, [visible, noteId, lectureId, userId]);
 
-    // Reset guard when noteId changes so new suggestions can be fetched
+    // Reset guard when dependencies change
     useEffect(() => {
         hasFetched.current = false;
         hasTriggeredGeneration.current = false;
-    }, [noteId]);
+    }, [noteId, lectureId, userId]);
 
     const loadSuggestions = async () => {
-        if (!noteId) return;
-
         setLoading(true);
         setError(null);
 
         try {
-            const data = await fetchSuggestions(noteId);
+            const data = noteId
+                ? await fetchSuggestions(noteId)
+                : await fetchSuggestions(null, lectureId, userId);
+
             setSuggestions(data);
         } catch (err) {
             console.error('Failed to load suggestions:', err);
@@ -86,31 +93,31 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
 
     // Generate new suggestions using AI
     const handleGenerateSuggestions = async () => {
-        if (!noteId || generating) return;
-
-        if (!noteId.trim()) {
-            console.error("Cannot generate suggestions: Note ID is empty");
-            setError('Cannot generate suggestions: Invalid note ID');
-            return;
-        }
+        // Clear any previous errors
+        setError(null);
 
         if (!lectureId) {
-            console.error("Cannot generate suggestions: Lecture ID is missing");
-            setError('Cannot generate suggestions: No lecture selected');
+            setError('Cannot generate suggestions: Lecture ID is missing');
             return;
         }
 
         hasTriggeredGeneration.current = true;
         setGenerating(true);
-        setError(null);
 
         try {
-            console.log(`Triggering document comparison for note ${noteId} in lecture ${lectureId}`);
+            console.log(`Triggering document comparison for lecture: ${lectureId}, user: ${userId}`);
 
-            // Pass the lectureId to the comparison function
-            const result = await triggerDocumentComparison(noteId, lectureId);
+            // Add timing information to help debug
+            const startTime = Date.now();
 
-            console.log('Document comparison complete, result:', result);
+            // Use the updated triggerDocumentComparison that can work with userId+lectureId
+            const result = await triggerDocumentComparison(noteId, lectureId, userId);
+
+            console.log(`Document comparison completed in ${Date.now() - startTime}ms, result:`, result);
+
+            if (result?.suggestions?.length === 0) {
+                setError('No suggestions were generated. You might need other users to take notes in this lecture first.');
+            }
 
             // Wait a moment before reloading to ensure suggestions are saved
             setTimeout(async () => {

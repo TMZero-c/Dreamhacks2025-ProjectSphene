@@ -7,8 +7,11 @@ router.use((req, res, next) => {
     next();
 });
 
-// Get suggestions for a note
+// Get suggestions by note ID
 router.get('/note/:noteId', suggestionController.getSuggestions);
+
+// Get suggestions by lecture ID and user ID
+router.get('/lecture/:lectureId/user/:userId', suggestionController.getSuggestionsByLectureAndUser);
 
 // Respond to a suggestion (accept or dismiss)
 router.post('/:id/respond', (req, res, next) => {

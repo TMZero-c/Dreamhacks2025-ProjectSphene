@@ -22,6 +22,30 @@ exports.getSuggestions = async (req, res) => {
     }
 };
 
+// Get suggestions for a note identified by lectureId and userId
+exports.getSuggestionsByLectureAndUser = async (req, res) => {
+    try {
+        const { lectureId, userId } = req.params;
+
+        // First find the note using lectureId and userId
+        const note = await Note.findOne({ lectureId, userId });
+        if (!note) {
+            return res.status(404).json({ message: 'Note not found for this user and lecture' });
+        }
+
+        // Then get suggestions for this note
+        const suggestions = await Suggestion.find({
+            noteId: note._id.toString(),
+            status: { $ne: 'dismissed' }
+        }).sort({ createdAt: -1 });
+
+        res.status(200).json(suggestions);
+    } catch (error) {
+        console.error('Error fetching suggestions by lecture and user:', error);
+        res.status(500).json({ message: 'Failed to fetch suggestions', error: error.message });
+    }
+};
+
 // Update suggestion status (accept or dismiss)
 exports.respondToSuggestion = async (req, res) => {
     try {
@@ -63,27 +87,30 @@ exports.respondToSuggestion = async (req, res) => {
 exports.compareDocuments = async (req, res) => {
     console.log('[suggestionController] compareDocuments called with body:', req.body);
     try {
-        const { noteId, lectureId } = req.body;
+        const { noteId, lectureId, userId } = req.body;
 
-        if (!noteId) {
-            return res.status(400).json({ message: 'Note ID is required' });
-        }
-
-        console.log(`Finding note with ID: ${noteId}`);
-
-        // Get the target note
+        // Get the target note - either directly by noteId or by lectureId+userId
         let targetNote;
         try {
-            // Try to find by MongoDB ObjectId if valid
-            if (mongoose.Types.ObjectId.isValid(noteId)) {
-                targetNote = await Note.findById(noteId);
-                console.log('Searched by MongoDB ObjectId:', targetNote ? 'found' : 'not found');
-            }
+            if (noteId) {
+                // Try to find by MongoDB ObjectId if valid
+                if (mongoose.Types.ObjectId.isValid(noteId)) {
+                    targetNote = await Note.findById(noteId);
+                    console.log('Searched by MongoDB ObjectId:', targetNote ? 'found' : 'not found');
+                }
 
-            // If not found or not a valid ObjectId, try as a string ID
-            if (!targetNote) {
-                targetNote = await Note.findOne({ id: noteId });
-                console.log('Searched by string ID:', targetNote ? 'found' : 'not found');
+                // If not found, try as a string ID
+                if (!targetNote) {
+                    targetNote = await Note.findOne({ id: noteId });
+                    console.log('Searched by string ID:', targetNote ? 'found' : 'not found');
+                }
+            } else if (lectureId && userId) {
+                // Find by lectureId and userId combination
+                targetNote = await Note.findOne({
+                    lectureId: mongoose.Types.ObjectId.isValid(lectureId) ? lectureId : null,
+                    userId
+                });
+                console.log(`Searched by lectureId and userId:`, targetNote ? 'found' : 'not found');
             }
         } catch (error) {
             console.error('Error finding note:', error);
@@ -91,15 +118,18 @@ exports.compareDocuments = async (req, res) => {
         }
 
         if (!targetNote) {
+            console.error('Note not found');
             return res.status(404).json({ message: 'Note not found' });
         }
 
-        console.log(`Found target note: ${targetNote.title} with lectureId: ${targetNote.lectureId}`);
+        console.log(`Found target note: ${targetNote.title} with ID: ${targetNote._id}`);
+        console.log(`Note's lecture ID: ${targetNote.lectureId}`);
 
         // Use provided lectureId or the one from the note
         const searchLectureId = lectureId || targetNote.lectureId;
 
         if (!searchLectureId) {
+            console.error('No lecture ID available');
             return res.status(400).json({ message: 'No lecture ID available' });
         }
 
@@ -113,23 +143,21 @@ exports.compareDocuments = async (req, res) => {
                 userId: { $ne: targetNote.userId }
             };
 
-            if (targetNote._id) {
-                query._id = { $ne: targetNote._id };
-            }
-
-            console.log('Finding other notes with query:', query);
+            console.log('Finding other notes with query:', JSON.stringify(query));
             otherNotes = await Note.find(query);
-            console.log(`Found ${otherNotes.length} other notes for comparison`);
+            console.log(`Found ${otherNotes.length} other notes for comparison from users:`,
+                otherNotes.map(note => note.userId));
+
+            if (otherNotes.length === 0) {
+                console.log('No other notes found for comparison');
+                return res.status(200).json({
+                    message: 'No other notes found for comparison',
+                    suggestions: []
+                });
+            }
         } catch (error) {
             console.error('Error finding other notes:', error);
             return res.status(500).json({ message: 'Error finding comparison notes', error: error.message });
-        }
-
-        if (otherNotes.length === 0) {
-            return res.status(200).json({
-                message: 'No other notes found for comparison',
-                suggestions: []
-            });
         }
 
         // Generate suggestions using OpenAI
@@ -146,9 +174,23 @@ exports.compareDocuments = async (req, res) => {
             });
         }
 
+        if (suggestions.length === 0) {
+            console.log('No suggestions were generated by OpenAI');
+            return res.status(200).json({
+                message: 'No suggestions generated',
+                suggestions: []
+            });
+        }
+
         // Save suggestions to database
         let savedSuggestions = [];
         try {
+            // Ensure each suggestion has the right noteId format
+            suggestions = suggestions.map(suggestion => ({
+                ...suggestion,
+                noteId: targetNote._id.toString() // Use consistent ID format
+            }));
+
             savedSuggestions = await Suggestion.insertMany(suggestions);
             console.log(`Saved ${savedSuggestions.length} suggestions to database`);
         } catch (error) {
