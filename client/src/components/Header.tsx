@@ -7,14 +7,17 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ title, loading }) => {
     return (
-        <header className="app-header">
+        <header className="header">
             <div className="header-content">
-                <h1>{title}</h1>
-                {loading && <div className="loading-indicator">Processing...</div>}
-            </div>
-            <div className="user-controls">
-                {/* temp */}
-                <button className="user-button">User</button>
+                <h1 className="header-title">{title}</h1>
+                {loading && (
+                    <div className="processing-indicator">
+                        Processing...
+                    </div>
+                )}
+                <button className="user-button">
+                    User
+                </button>
             </div>
         </header>
     );

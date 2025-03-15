@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './App.css'
 import TextEditor from './components/TextEditor'
 import Header from './components/Header'
+import SuggestionPanel from './components/SuggestionPanel'
 
 import { Note } from './types/types'
 import { fetchNotes, saveNote } from './services/api'
@@ -9,6 +10,8 @@ import { fetchNotes, saveNote } from './services/api'
 function App() {
   const [currentNote, setCurrentNote] = useState<Note>({ id: '', content: '', userId: 'current-user', title: 'Untitled Note' })
   const [loading, setLoading] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const editorRef = useRef(null)
 
   // Load initial note data
   useEffect(() => {
@@ -39,6 +42,10 @@ function App() {
       const savedNote = await saveNote(updatedNote)
       setCurrentNote(savedNote)
 
+      // Additional check to ensure suggestions are refreshed on save
+      if (showSuggestions && editorRef.current) {
+        // Could trigger suggestion refresh here if needed
+      }
     } catch (error) {
       console.error('Failed to save note:', error)
     } finally {
@@ -46,16 +53,36 @@ function App() {
     }
   }
 
+  // Toggle suggestion panel visibility
+  const toggleSuggestions = () => {
+    setShowSuggestions(!showSuggestions)
+  }
 
   return (
     <div className="app-container">
       <Header title="Collaborative Notes" loading={loading} />
       <div className="main-content">
-        <TextEditor
-          content={currentNote.content}
-          onSave={handleSaveNote}
-        />
+        {/* Editor section - adjust width based on suggestion panel visibility */}
+        <div className={`editor-section ${showSuggestions ? 'with-suggestions' : ''}`}>
+          <TextEditor
+            ref={editorRef}
+            content={currentNote.content}
+            onSave={handleSaveNote}
+            onToggleSuggestions={toggleSuggestions}
+            showSuggestions={showSuggestions}
+          />
+        </div>
 
+        {/* Side panel for suggestions */}
+        {showSuggestions && (
+          <div className="suggestions-section">
+            <SuggestionPanel
+              noteId={currentNote.id}
+              quillRef={editorRef}
+              visible={true}
+            />
+          </div>
+        )}
       </div>
     </div>
   )
