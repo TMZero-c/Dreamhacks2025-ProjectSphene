@@ -1,6 +1,5 @@
 const mongoose = require('mongoose');
 
-// Define User Schema
 const userSchema = new mongoose.Schema({
     name: {
         type: String,
@@ -14,17 +13,11 @@ const userSchema = new mongoose.Schema({
         trim: true,
         lowercase: true
     },
-    profilePicture: {
-        type: String,
-        default: ''
-    },
-    createdAt: {
-        type: Date,
-        default: Date.now
-    },
-    // Add other user fields as needed
+    // Add more fields as needed (e.g., password, profile, etc.)
+}, {
+    timestamps: true
 });
 
-// Create and export User model
 const User = mongoose.model('User', userSchema);
+
 module.exports = User;
