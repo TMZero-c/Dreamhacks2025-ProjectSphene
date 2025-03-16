@@ -58,8 +58,8 @@ const SuggestionItem: React.FC<SuggestionItemProps> = ({
                     return op.insert;
                 })
                 .join('')
-                .substring(0, 100) + (
-                    suggestion.content.ops.join('').length > 100 ? '...' : ''
+                .substring(0, 200) + (
+                    suggestion.content.ops.join('').length > 200 ? '...' : ''
                 );
         } catch (e) {
             console.error("Error formatting preview text:", e);
@@ -78,8 +78,8 @@ const SuggestionItem: React.FC<SuggestionItemProps> = ({
             return (
                 <div className="insertion-point-info">
                     <span className="insertion-label">Insert {position}:</span>
-                    <span className="content-marker">"{contentMarker.substring(0, 40)}
-                        {contentMarker.length > 40 ? '...' : ''}"</span>
+                    <span className="content-marker">"{contentMarker.substring(0, 100)}
+                        {contentMarker.length > 100 ? '...' : ''}"</span>
                 </div>
             );
         } catch (e) {

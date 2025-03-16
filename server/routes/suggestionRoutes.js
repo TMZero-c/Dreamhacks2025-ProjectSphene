@@ -22,4 +22,10 @@ router.post('/:id/respond', (req, res, next) => {
 // Trigger document comparison
 router.post('/compare', suggestionController.compareDocuments);
 
+// Delete all suggestions for a note
+router.delete('/note/:noteId', suggestionController.deleteAllSuggestions);
+
+// Delete all suggestions for a lecture/user combination
+router.delete('/lecture/:lectureId/user/:userId', suggestionController.deleteAllSuggestionsByLectureAndUser);
+
 module.exports = router;

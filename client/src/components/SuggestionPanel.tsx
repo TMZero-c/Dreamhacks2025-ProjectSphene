@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { fetchSuggestions, respondToSuggestion, triggerDocumentComparison } from '../services/api';
+import { fetchSuggestions, respondToSuggestion, triggerDocumentComparison, deleteAllSuggestions } from '../services/api';
 import SuggestionItem from './SuggestionItem';
 import { Suggestion } from '../types/types';
 import './SuggestionPanel.css';
@@ -30,7 +30,7 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
 
     // Add debouncing for button clicks
     const [isGenerateButtonDisabled, setIsGenerateButtonDisabled] = useState(false);
-    const [isRefreshButtonDisabled, setIsRefreshButtonDisabled] = useState(false);
+    const [isRemoveAllButtonDisabled, setIsRemoveAllButtonDisabled] = useState(false);
 
     // Keep track of active operations to prevent race conditions
     const activeOperation = useRef<string | null>(null);
@@ -98,50 +98,9 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
         };
     }, [noteId, lectureId, userId]);
 
-    // Debounced function to fetch suggestions
-    const debouncedLoadSuggestions = useCallback(async () => {
-        if (activeOperation.current === 'loadSuggestions') return;
-
-        activeOperation.current = 'loadSuggestions';
-        setIsRefreshButtonDisabled(true);
-        setLoading(true);
-
-        try {
-            const data = noteId
-                ? await fetchSuggestions(noteId)
-                : await fetchSuggestions(null, lectureId, userId);
-
-            setSuggestions(data);
-
-            // Only clear error on success
-            if (error && error.includes('load')) {
-                clearError();
-            }
-        } catch (err) {
-            console.error('Failed to load suggestions:', err);
-            setError('Failed to load suggestions. Please try again.');
-        } finally {
-            setLoading(false);
-            activeOperation.current = null;
-
-            // Re-enable button after a short delay
-            setTimeout(() => {
-                setIsRefreshButtonDisabled(false);
-            }, 1000);
-        }
-    }, [noteId, lectureId, userId, error]);
-
-    // Create a wrapper for the loadSuggestions function
-    const handleRefreshClick = () => {
-        if (isRefreshButtonDisabled || loading || generating) return;
-        debouncedLoadSuggestions();
-    };
-
     // Generate new suggestions using AI
     const handleGenerateSuggestions = async () => {
         if (activeOperation.current === 'generateSuggestions') return;
-
-        // Don't clear previous errors automatically
 
         // Validate the necessary IDs
         if (!lectureId) {
@@ -155,6 +114,17 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
         setIsGenerateButtonDisabled(true);
 
         try {
+            // First, delete all existing suggestions
+            console.log(`Deleting existing suggestions before generating new ones`);
+            try {
+                await deleteAllSuggestions(noteId, lectureId, userId);
+                // Clear suggestions from state immediately
+                setSuggestions([]);
+            } catch (error) {
+                console.error('Error deleting existing suggestions:', error);
+                // Continue with generation even if deletion fails
+            }
+
             console.log(`Triggering document comparison for lecture: ${lectureId}, user: ${userId}`);
 
             // Add timing information to help debug
@@ -174,7 +144,14 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
 
             // Wait a moment before reloading to ensure suggestions are saved
             setTimeout(async () => {
-                await debouncedLoadSuggestions();
+                try {
+                    const newSuggestions = noteId
+                        ? await fetchSuggestions(noteId)
+                        : await fetchSuggestions(null, lectureId, userId);
+                    setSuggestions(newSuggestions);
+                } catch (error) {
+                    console.error('Error fetching new suggestions:', error);
+                }
             }, 1000);
         } catch (err: any) {
             console.error('Failed to generate suggestions:', err);
@@ -187,6 +164,36 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
             setTimeout(() => {
                 setIsGenerateButtonDisabled(false);
             }, 2000); // Longer delay for generate button to prevent rapid clicking
+        }
+    };
+
+    // Handle removing all suggestions
+    const handleRemoveAllSuggestions = async () => {
+        if (activeOperation.current === 'removeAllSuggestions') return;
+
+        activeOperation.current = 'removeAllSuggestions';
+        setIsRemoveAllButtonDisabled(true);
+        setLoading(true);
+
+        try {
+            console.log(`Deleting all suggestions for ${noteId ? `note: ${noteId}` : `lecture: ${lectureId}, user: ${userId}`}`);
+            await deleteAllSuggestions(noteId, lectureId, userId);
+
+            // Clear suggestions from state
+            setSuggestions([]);
+            clearError();
+
+        } catch (err) {
+            console.error('Failed to delete suggestions:', err);
+            setError('Failed to delete suggestions. Please try again.');
+        } finally {
+            setLoading(false);
+            activeOperation.current = null;
+
+            // Re-enable button after a short delay
+            setTimeout(() => {
+                setIsRemoveAllButtonDisabled(false);
+            }, 1000);
         }
     };
 
@@ -431,14 +438,14 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
                         disabled={loading || generating || isGenerateButtonDisabled}
                         className={`generate-button ${isGenerateButtonDisabled ? 'disabled' : ''}`}
                     >
-                        {generating ? 'Generating...' : 'Generate Suggestions'}
+                        {generating ? 'Generating...' : 'Generate'}
                     </button>
                     <button
-                        onClick={handleRefreshClick}
-                        disabled={loading || generating || isRefreshButtonDisabled}
-                        className={`refresh-button ${isRefreshButtonDisabled ? 'disabled' : ''}`}
+                        onClick={handleRemoveAllSuggestions}
+                        disabled={loading || generating || isRemoveAllButtonDisabled || suggestions.length === 0}
+                        className={`remove-all-button ${isRemoveAllButtonDisabled || suggestions.length === 0 ? 'disabled' : ''}`}
                     >
-                        {loading ? 'Loading...' : 'Refresh'}
+                        {loading && activeOperation.current === 'removeAllSuggestions' ? 'Removing...' : 'Remove All'}
                     </button>
                 </div>
             </div>

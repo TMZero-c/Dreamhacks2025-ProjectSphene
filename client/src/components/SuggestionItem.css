@@ -3,7 +3,7 @@
     border: 1px solid rgba(122, 139, 143, 0.2);
     border-radius: 8px;
     overflow: auto;
-    min-height: 70px;
+
     display: flex;
     flex-direction: column;
     margin-bottom: 8px;

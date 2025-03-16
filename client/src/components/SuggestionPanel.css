@@ -5,10 +5,9 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     padding: 16px;
     height: 100%;
-    display: flex;
-    flex-direction: column;
+
     width: 100%;
-    overflow: hidden;
+    overflow: auto;
 }
 
 @media (min-width: 768px) {
@@ -81,41 +80,6 @@
     .panel-actions button {
         flex: 0 1 auto;
     }
-}
-
-.refresh-button {
-    font-size: 0.75rem;
-    padding: 6px 12px;
-    background-color: #f1f3f4;
-    color: #333;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.9rem;
-    transition: background-color 0.2s, opacity 0.2s;
-}
-
-@media (min-width: 768px) {
-    .refresh-button {
-        font-size: 0.875rem;
-        padding: 10px 20px;
-    }
-}
-
-.refresh-button:hover {
-    background-color: #68b9a1;
-}
-
-.refresh-button:hover:not(:disabled) {
-    opacity: 0.9;
-}
-
-.refresh-button:disabled,
-.refresh-button.disabled {
-    background-color: #e0e0e0;
-    color: #999;
-    cursor: not-allowed;
-    opacity: 0.7;
 }
 
 .error-message {
@@ -213,9 +177,11 @@
     gap: 16px;
     flex: 1;
     overflow-y: auto;
+    min-height: 0;
     padding-right: 4px;
     padding-bottom: 16px;
     margin-top: 8px;
+    max-height: calc(100vh - 200px);
 }
 
 @media (min-width: 768px) {
@@ -295,4 +261,25 @@
     color: #999;
     cursor: not-allowed;
     opacity: 0.7;
+}
+
+/* Styling for Remove All button */
+.remove-all-button {
+    background-color: #f1f1f1;
+    color: #333;
+    border: 1px solid #ddd;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: 8px;
+    transition: all 0.2s ease;
+}
+
+.remove-all-button:hover:not(.disabled) {
+    background-color: #e0e0e0;
+}
+
+.remove-all-button.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }

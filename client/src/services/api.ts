@@ -226,3 +226,36 @@ export async function respondToSuggestion(suggestionId: string, action: 'accept'
         throw error;
     }
 }
+
+// Delete all suggestions for a specific note or lecture+user
+export async function deleteAllSuggestions(
+    noteId?: string | null,
+    lectureId?: string,
+    userId?: string
+): Promise<void> {
+    console.log(`Deleting all suggestions: ${noteId ? `noteId=${noteId}` : `lectureId=${lectureId}, userId=${userId}`}`);
+
+    try {
+        let endpoint;
+        if (noteId) {
+            endpoint = `${API_URL}/suggestions/note/${noteId}`;
+        } else if (lectureId && userId) {
+            endpoint = `${API_URL}/suggestions/lecture/${lectureId}/user/${userId}`;
+        } else {
+            throw new Error('Either noteId or both lectureId and userId are required');
+        }
+
+        const response = await fetch(endpoint, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error: ${response.status}`);
+        }
+
+        console.log('Successfully deleted all suggestions');
+    } catch (error) {
+        console.error('Error deleting suggestions:', error);
+        throw error;
+    }
+}

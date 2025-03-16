@@ -211,3 +211,54 @@ exports.compareDocuments = async (req, res) => {
         res.status(500).json({ message: 'Failed to compare documents', error: error.message });
     }
 };
+
+// Delete all suggestions for a specific note
+exports.deleteAllSuggestions = async (req, res) => {
+    try {
+        const { noteId } = req.params;
+
+        console.log(`Deleting all suggestions for note: ${noteId}`);
+
+        const result = await Suggestion.deleteMany({ noteId: noteId });
+
+        console.log(`Deleted ${result.deletedCount} suggestions`);
+
+        res.status(200).json({
+            message: `Successfully deleted ${result.deletedCount} suggestions`,
+            deletedCount: result.deletedCount
+        });
+    } catch (error) {
+        console.error('Error deleting suggestions:', error);
+        res.status(500).json({ message: 'Failed to delete suggestions', error: error.message });
+    }
+};
+
+// Delete all suggestions for a note identified by lectureId and userId
+exports.deleteAllSuggestionsByLectureAndUser = async (req, res) => {
+    try {
+        const { lectureId, userId } = req.params;
+
+        console.log(`Finding note for lecture: ${lectureId} and user: ${userId}`);
+
+        // First find the note using lectureId and userId
+        const note = await Note.findOne({ lectureId, userId });
+        if (!note) {
+            return res.status(404).json({ message: 'Note not found for this user and lecture' });
+        }
+
+        console.log(`Found note: ${note._id}, deleting all suggestions`);
+
+        // Then delete all suggestions for this note
+        const result = await Suggestion.deleteMany({ noteId: note._id.toString() });
+
+        console.log(`Deleted ${result.deletedCount} suggestions`);
+
+        res.status(200).json({
+            message: `Successfully deleted ${result.deletedCount} suggestions`,
+            deletedCount: result.deletedCount
+        });
+    } catch (error) {
+        console.error('Error deleting suggestions by lecture and user:', error);
+        res.status(500).json({ message: 'Failed to delete suggestions', error: error.message });
+    }
+};
