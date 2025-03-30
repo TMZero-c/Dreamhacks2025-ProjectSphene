@@ -122,7 +122,7 @@ export async function triggerDocumentComparison(
     noteId?: string,
     lectureId?: string,
     userId?: string
-): Promise<any> {
+): Promise<{ message: string; suggestions?: Suggestion[] }> {
     console.log(`Triggering document comparison: ${noteId ? `noteId=${noteId}` : `lectureId=${lectureId}, userId=${userId}`}`);
 
     try {

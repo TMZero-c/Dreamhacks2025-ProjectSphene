@@ -30,12 +30,14 @@ export interface InsertionPoint {
     position: 'before' | 'after';
 }
 
+import { Delta } from 'quill';
+
 // Interface for AI-generated suggestions
 export interface Suggestion {
     id?: string;
     _id?: string; // Add the _id field here
     title: string;
-    content: any; // Quill Delta object
+    content: Delta; // Quill Delta object
     noteId: string;
     type: 'missing_content' | 'clarification' | 'structure' | 'key_point';
     source?: string; // Could indicate which user's document this came from

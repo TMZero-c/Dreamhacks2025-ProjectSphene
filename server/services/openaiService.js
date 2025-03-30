@@ -78,12 +78,12 @@ exports.generateSuggestions = async (targetNote, otherNotes) => {
                             content: `You are an assistant that identifies key information present in Document B 
                           but missing from Document A. Generate concise suggestions for improving Document A.
                           Each suggestion should include a title and content formatted as a valid Quill Delta object.
-                          Maintain the writing style, tone, and formatting patterns of Document A (not Document B).
+                          Maintain the writing style, tone, and formatting patterns of Document A (never Document B).
                           Ensure your Quill Delta objects follow proper structure with valid ops arrays.`
                         },
                         { role: "user", content: prompt }
                     ],
-                    temperature: 0.7,
+                    temperature: 0.9,
                     max_tokens: 4096 // allows full JSON response
                 });
 
@@ -208,10 +208,10 @@ For each missing element, generate:
    - Position relative to marker (before/after)
 
 The Quill Delta object should:
-- Follow Document A's writing style, tone, and terminology
+- Follow Document A's writing style, tone, and terminology, not Document B's, even if the suggestion is from Document B
 - Match Document A's formatting patterns with similar attributes
 - Use appropriate header levels if headers are used in Document A
-- Match Document A's use of bullet points, emphasis, and other formatting
+- Match Document A's use of bullet points, emphasis, and other formatting. Avoid introducing new styles. For example, if Document A uses full sentences, don't introduce bullet points and vice versa where if Document A uses bullet points, don't introduce full sentences.
 - Be properly formatted with valid "ops" array structure
 
 Format your response as JSON with the following structure:

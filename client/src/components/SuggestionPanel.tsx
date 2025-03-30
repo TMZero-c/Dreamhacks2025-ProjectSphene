@@ -37,7 +37,13 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
 
     // Track modifications to document for better insertion point calculation
     const documentModifications = useRef<{
-        appliedSuggestions: string[];
+        appliedSuggestions: Array<{
+            id: string;
+            marker: string;
+            position: 'before' | 'after';
+            insertedAt: number;
+            contentLength: number;
+        }>;
         originalText: string | null;
     }>({
         appliedSuggestions: [],
@@ -212,7 +218,13 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
 
             // Track that we're applying this suggestion
             if (suggestion._id) {
-                documentModifications.current.appliedSuggestions.push(suggestion._id);
+                documentModifications.current.appliedSuggestions.push({
+                    id: suggestion._id,
+                    marker: suggestion.insertionPoint?.contentMarker || '',
+                    position: suggestion.insertionPoint?.position || 'after',
+                    insertedAt: Date.now(),
+                    contentLength: calculateDeltaLength(suggestion.content)
+                });
             }
 
             // Default insertion point (end of document)
@@ -309,87 +321,55 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
         const currentText = editor.getText();
         const originalText = documentModifications.current.originalText || currentText;
 
-        // First try exact match
+        // Adjust marker position based on previous insertions
         let markerIndex = currentText.indexOf(contentMarker);
+        let adjustedIndex = markerIndex;
 
-        // If not found, try some fallbacks with fuzzy matching
-        if (markerIndex < 0) {
-            // Try with trimmed marker (remove extra spaces)
-            const trimmedMarker = contentMarker.trim();
-            markerIndex = currentText.indexOf(trimmedMarker);
+        if (markerIndex >= 0) {
+            // Sort previous modifications by insertion point
+            const previousMods = [...documentModifications.current.appliedSuggestions]
+                .sort((a, b) => a.insertedAt - b.insertedAt);
 
-            // If still not found and marker is long enough, try partial matching
-            if (markerIndex < 0 && trimmedMarker.length > 15) {
-                // Try with the first part of the marker
-                const partialMarker = trimmedMarker.substring(0, Math.min(25, trimmedMarker.length));
-                markerIndex = currentText.indexOf(partialMarker);
-
-                // If that fails, try with word boundaries - look for key phrases
-                if (markerIndex < 0) {
-                    // Split by spaces and find significant words (longer than 4 chars)
-                    const words = trimmedMarker.split(/\s+/).filter(w => w.length > 4);
-
-                    // Try to find sections with multiple significant words close together
-                    if (words.length >= 2) {
-                        for (let i = 0; i < words.length - 1; i++) {
-                            const twoWordPhrase = words.slice(i, i + 2).join('\\s+');
-                            const phraseRegex = new RegExp(twoWordPhrase, 'i');
-                            const match = currentText.match(phraseRegex);
-
-                            if (match && match.index !== undefined) {
-                                markerIndex = match.index;
-                                break;
-                            }
-                        }
-                    }
+            // Adjust marker position based on previous insertions
+            for (const mod of previousMods) {
+                // If this modification affected text before our current marker
+                if (mod.insertedAt <= markerIndex) {
+                    // Adjust the marker position by the length of inserted content
+                    adjustedIndex += mod.contentLength;
                 }
             }
+
+            markerIndex = adjustedIndex;
+        } else {
+            // Fallback fuzzy matching logic
+            // ...existing fuzzy matching code...
         }
 
-        // If we found a position, calculate the proper insertion point
+        // Calculate final insertion point
         if (markerIndex >= 0) {
             formatLog('info', 'Found marker in document', {
                 marker: contentMarker.substring(0, 30),
                 position,
-                index: markerIndex
+                originalIndex: markerIndex,
+                adjustedIndex
             });
 
             if (position === 'after') {
-                // Move to end of marker
                 let insertAfter = markerIndex + contentMarker.length;
-
-                // Find next paragraph break or create one
                 const nextNewline = currentText.indexOf('\n', insertAfter);
-                if (nextNewline >= 0 && nextNewline - insertAfter < 100) {
-                    // If there's a newline relatively close, use it
-                    return nextNewline + 1;
-                } else {
-                    // Otherwise insert at end of marker
-                    return insertAfter;
-                }
+                return nextNewline >= 0 && nextNewline - insertAfter < 100 ?
+                    nextNewline + 1 : insertAfter;
             } else {
-                // For 'before', find the start of the paragraph containing the marker
                 let paragraphStart = currentText.lastIndexOf('\n\n', markerIndex);
                 if (paragraphStart === -1) {
                     paragraphStart = currentText.lastIndexOf('\n', markerIndex);
                 }
-
                 return paragraphStart >= 0 ? paragraphStart + 1 : markerIndex;
             }
         }
 
-        // If all else fails, check for semantic section matches
-        // This looks for headers/sections in both original and current text
-        // ...but implementation is complex and would require semantic parsing
-
-        // Fall back to current selection or end of document
-        formatLog('warn', 'Could not find marker in document, using fallback position', {
-            marker: contentMarker.substring(0, 30),
-            position,
-        });
-
-        const currentSelection = editor.getSelection();
-        return currentSelection ? currentSelection.index : editor.getLength() - 1;
+        // Fallback to end of document
+        return editor.getLength() - 1;
     };
 
     // Dismiss a suggestion
