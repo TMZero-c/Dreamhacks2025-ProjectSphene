@@ -4,34 +4,20 @@ import TextEditor from './components/TextEditor'
 import Header from './components/Header'
 import SuggestionPanel from './components/SuggestionPanel'
 import LectureSelector from './components/LectureSelector'
+import { AuthContainer } from './components/AuthComponents'
+import { useAuth } from './contexts/AuthContext'
 
 import { Note, Lecture } from './types/types'
 import { fetchNotes, saveNote, fetchUserLectures, createLecture } from './services/api'
 
-// Test user IDs for easier testing
-const TEST_USER_IDS = ['user1', 'user2', 'user3'];
-
 function App() {
-  // Generate a random user ID or get from local storage to simulate different users in different browsers
-  const [userId] = useState(() => {
-    const storedUserId = localStorage.getItem('sphene_user_id');
-    if (storedUserId) return storedUserId;
-
-    // Use user1 as default test user
-    const defaultUserId = TEST_USER_IDS[0];
-    localStorage.setItem('sphene_user_id', defaultUserId);
-    return defaultUserId;
-  });
-
-  // For development/testing: Allow manual override of user ID
-  const [userIdInput, setUserIdInput] = useState('');
-  const [showUserIdInput, setShowUserIdInput] = useState(false);
+  const { isAuthenticated, user, logout, loading: authLoading } = useAuth();
 
   // State for the current note and lecture
   const [currentNote, setCurrentNote] = useState<Note>({
     id: '',
     content: '',
-    userId: userId,
+    userId: user?.id || '',
     title: 'Loading...',
     lectureId: ''
   });
@@ -45,37 +31,35 @@ function App() {
   const currentOperation = useRef<string | null>(null);
   const lastSelectedLectureId = useRef<string | null>(null);
 
-  // Load initial lectures when the app starts
+  // Load initial lectures when the app starts and user is authenticated
   useEffect(() => {
-    const loadInitialLectures = async () => {
-      setLoading(true);
-      try {
-        const lectures = await fetchUserLectures(userId);
-
-        // If the user has no lectures, create a default one
-        if (!lectures || lectures.length === 0) {
-          const defaultLecture = await createLecture({
-            title: 'My First Lecture',
-            description: 'Default lecture for notes',
-            code: Math.random().toString(36).substring(2, 8).toUpperCase(),
-            createdBy: userId
-          });
-
-          setSelectedLecture(defaultLecture);
-        } else {
-          setSelectedLecture(lectures[0]);
-        }
-      } catch (error) {
-        console.error('Failed to load initial lectures:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (userId) {
+    if (user) {
       loadInitialLectures();
     }
-  }, [userId]);
+  }, [user]);
+
+  const loadInitialLectures = async () => {
+    setLoading(true);
+    try {
+      const lectures = await fetchUserLectures();
+
+      // If the user has no lectures, create a default one
+      if (!lectures || lectures.length === 0) {
+        const defaultLecture = await createLecture({
+          title: 'My First Lecture',
+          description: 'Default lecture for notes'
+        });
+
+        setSelectedLecture(defaultLecture);
+      } else {
+        setSelectedLecture(lectures[0]);
+      }
+    } catch (error) {
+      console.error('Failed to load initial lectures:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Load notes when selected lecture changes
   useEffect(() => {
@@ -86,14 +70,14 @@ function App() {
       setCurrentNote({
         id: '',
         content: '',
-        userId: userId,
+        userId: user?.id || '',
         title: selectedLecture.title, // Use lecture title as default note title
         lectureId: selectedLecture._id
       });
 
       loadNoteForLecture(selectedLecture._id);
     }
-  }, [selectedLecture, userId]);
+  }, [selectedLecture, user]);
 
   // Load note for a specific lecture - simplified to one note per lecture
   const loadNoteForLecture = async (lectureId: string) => {
@@ -111,7 +95,7 @@ function App() {
         return;
       }
 
-      const notes = await fetchNotes(userId, lectureId);
+      const notes = await fetchNotes(lectureId);
 
       // Check again if selected lecture has changed
       if (lastSelectedLectureId.current !== lectureId) {
@@ -135,7 +119,7 @@ function App() {
               { insert: 'Start taking notes here...\n' }
             ]
           }),
-          userId: userId,
+          userId: user?.id || '',
           lectureId: lectureId,
           title: selectedLecture?.title || 'New Note'
         };
@@ -164,7 +148,7 @@ function App() {
               { insert: 'There was an error loading your note. Please try again.\n' }
             ]
           }),
-          userId: userId,
+          userId: user?.id || '',
           lectureId: lectureId,
           title: 'Error'
         });
@@ -189,7 +173,7 @@ function App() {
       const updatedNote = {
         ...currentNote,
         content,
-        userId,
+        userId: user?.id || '',
         lectureId: selectedLecture._id
       };
 
@@ -233,81 +217,56 @@ function App() {
     }
   };
 
-  // Handle user ID change (for testing)
-  const handleUserIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setUserIdInput(e.target.value);
+  // For development mode only - add dev user switching functionality
+  const DevUserControls = () => {
+    if (process.env.NODE_ENV !== 'development') return null;
+
+    const switchDevUser = (userId: string) => {
+      localStorage.setItem('dev_user_id', userId);
+      window.location.reload(); // Reload to apply the changes
+    };
+
+    return (
+      <div className="dev-controls">
+        <h4>Development Mode: Switch User</h4>
+        <div className="dev-user-buttons">
+          <button onClick={() => switchDevUser('user1')}>User 1</button>
+          <button onClick={() => switchDevUser('user2')}>User 2</button>
+          <button onClick={() => switchDevUser('admin')}>Admin</button>
+        </div>
+      </div>
+    );
   };
 
-  // Quick user switcher - for testing
-  const quickSwitchUser = (testUserId: string) => {
-    localStorage.setItem('sphene_user_id', testUserId);
-    window.location.reload();
+  // Handle successful authentication
+  const handleAuthSuccess = () => {
+    window.location.reload(); // Refresh to update auth context
+  };
+
+  if (authLoading) {
+    return <div className="loading-container">Loading...</div>;
+  }
+
+  if (!isAuthenticated || !user) {
+    return <AuthContainer onSuccess={handleAuthSuccess} />;
   }
 
   return (
     <div className="app-container">
       <Header
-        title={`${selectedLecture?.title || 'Loading...'} (${userId})`}
+        title={`${selectedLecture?.title || 'Loading...'}`}
         loading={loading}
+        user={user}
+        onLogout={logout}
       />
 
-      {/* User ID test controls (for development only) */}
-      <div className="user-controls" style={{ padding: '8px', textAlign: 'center' }}>
-        <div style={{ marginBottom: '8px' }}>
-          <span>Quick Switch: </span>
-          {TEST_USER_IDS.map((testId) => (
-            <button
-              key={testId}
-              onClick={() => quickSwitchUser(testId)}
-              style={{
-                padding: '4px 8px',
-                marginRight: '8px',
-                fontWeight: userId === testId ? 'bold' : 'normal',
-                backgroundColor: userId === testId ? '#e0e0e0' : 'transparent'
-              }}
-            >
-              {testId}
-            </button>
-          ))}
-        </div>
-
-        <button
-          onClick={() => setShowUserIdInput(!showUserIdInput)}
-          style={{ padding: '4px 8px', marginRight: '8px' }}
-        >
-          {showUserIdInput ? 'Hide Custom User ID' : 'Use Custom User ID'}
-        </button>
-
-        {showUserIdInput && (
-          <span>
-            <input
-              type="text"
-              value={userIdInput}
-              onChange={handleUserIdChange}
-              placeholder="Enter custom user ID"
-              style={{ padding: '4px', marginRight: '8px', width: '180px' }}
-            />
-            <button
-              onClick={() => {
-                if (userIdInput.trim()) {
-                  localStorage.setItem('sphene_user_id', userIdInput.trim());
-                  window.location.reload();
-                }
-              }}
-              style={{ padding: '4px 8px' }}
-              disabled={!userIdInput.trim()}
-            >
-              Apply
-            </button>
-          </span>
-        )}
-      </div>
+      {/* Development-only user controls */}
+      {process.env.NODE_ENV === 'development' && <DevUserControls />}
 
       <div className="main-content">
         {/* Sidebar with lecture selector - only show when suggestions are hidden */}
         <div className={`sidebar ${showSuggestions ? 'hide-sidebar' : ''}`}>
           <LectureSelector
-            userId={userId}
             selectedLecture={selectedLecture}
             onLectureSelect={handleLectureSelect}
           />
@@ -334,8 +293,7 @@ function App() {
         {showSuggestions && selectedLecture && (
           <div className="suggestions-section">
             <SuggestionPanel
-              noteId={currentNote.id} // Keep this for backward compatibility
-              userId={userId} // Add userId
+              noteId={currentNote.id}
               lectureId={selectedLecture._id}
               quillRef={editorRef}
               visible={true}

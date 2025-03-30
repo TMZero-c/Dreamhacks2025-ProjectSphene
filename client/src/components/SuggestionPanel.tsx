@@ -6,7 +6,6 @@ import './SuggestionPanel.css';
 
 interface SuggestionPanelProps {
     noteId?: string; // Make noteId optional
-    userId: string; // Add userId prop
     lectureId: string; // Make lectureId required
     quillRef: React.RefObject<any>;
     visible: boolean;
@@ -14,12 +13,11 @@ interface SuggestionPanelProps {
 
 const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
     noteId,
-    userId,
     lectureId,
     quillRef,
     visible
 }) => {
-    console.log(`SuggestionPanel rendering for lecture: ${lectureId}, user: ${userId}`);
+    console.log(`SuggestionPanel rendering for lecture: ${lectureId}`);
 
     const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
     const [loading, setLoading] = useState(false);
@@ -57,7 +55,7 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
 
     // Fetch suggestions when the panel becomes visible or lectureId/noteId changes
     useEffect(() => {
-        if (visible && (noteId || (lectureId && userId))) {
+        if (visible && (noteId || lectureId)) {
             // Reset our reference flags when note or lecture changes
             if (hasFetched.current && hasTriggeredGeneration.current) {
                 hasFetched.current = false;
@@ -67,13 +65,13 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
             if (!hasFetched.current) {
                 (async () => {
                     hasFetched.current = true;
-                    console.log(`Fetching suggestions for ${noteId ? `note: ${noteId}` : `lecture: ${lectureId}, user: ${userId}`}`);
+                    console.log(`Fetching suggestions for ${noteId ? `note: ${noteId}` : `lecture: ${lectureId}`}`);
                     setLoading(true);
                     try {
-                        // Use either noteId or userId+lectureId to fetch suggestions
+                        // Use either noteId or lectureId to fetch suggestions
                         const fetchedSuggestions = noteId
                             ? await fetchSuggestions(noteId)
-                            : await fetchSuggestions(null, lectureId, userId);
+                            : await fetchSuggestions(null, lectureId);
 
                         console.log(`Fetched ${fetchedSuggestions.length} suggestions`);
                         setSuggestions(fetchedSuggestions);
@@ -92,7 +90,7 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
                 })();
             }
         }
-    }, [visible, noteId, lectureId, userId]);
+    }, [visible, noteId, lectureId]);
 
     // Reset guard when dependencies change
     useEffect(() => {
@@ -102,7 +100,7 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
             appliedSuggestions: [],
             originalText: null
         };
-    }, [noteId, lectureId, userId]);
+    }, [noteId, lectureId]);
 
     // Generate new suggestions using AI
     const handleGenerateSuggestions = async () => {
@@ -123,7 +121,7 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
             // First, delete all existing suggestions
             console.log(`Deleting existing suggestions before generating new ones`);
             try {
-                await deleteAllSuggestions(noteId, lectureId, userId);
+                await deleteAllSuggestions(noteId, lectureId);
                 // Clear suggestions from state immediately
                 setSuggestions([]);
             } catch (error) {
@@ -131,13 +129,13 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
                 // Continue with generation even if deletion fails
             }
 
-            console.log(`Triggering document comparison for lecture: ${lectureId}, user: ${userId}`);
+            console.log(`Triggering document comparison for lecture: ${lectureId}`);
 
             // Add timing information to help debug
             const startTime = Date.now();
 
-            // Use the updated triggerDocumentComparison that can work with userId+lectureId
-            const result = await triggerDocumentComparison(noteId, lectureId, userId);
+            // Use the updated triggerDocumentComparison that can work with lectureId
+            const result = await triggerDocumentComparison(noteId, lectureId);
 
             console.log(`Document comparison completed in ${Date.now() - startTime}ms, result:`, result);
 
@@ -153,7 +151,7 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
                 try {
                     const newSuggestions = noteId
                         ? await fetchSuggestions(noteId)
-                        : await fetchSuggestions(null, lectureId, userId);
+                        : await fetchSuggestions(null, lectureId);
                     setSuggestions(newSuggestions);
                 } catch (error) {
                     console.error('Error fetching new suggestions:', error);
@@ -182,8 +180,8 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
         setLoading(true);
 
         try {
-            console.log(`Deleting all suggestions for ${noteId ? `note: ${noteId}` : `lecture: ${lectureId}, user: ${userId}`}`);
-            await deleteAllSuggestions(noteId, lectureId, userId);
+            console.log(`Deleting all suggestions for ${noteId ? `note: ${noteId}` : `lecture: ${lectureId}`}`);
+            await deleteAllSuggestions(noteId, lectureId);
 
             // Clear suggestions from state
             setSuggestions([]);

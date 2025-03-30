@@ -1,170 +1,152 @@
 const Note = require('../models/noteModel');
 const mongoose = require('mongoose');
 
-// Get the note for a specific user and lecture
-exports.getNotes = async (req, res) => {
+/**
+ * Get notes for the current user
+ */
+exports.getUserNotes = async (req, res) => {
     try {
-        const { userId, lectureId } = req.params;
-
-        const query = { userId };
-        if (lectureId) {
-            query.lectureId = lectureId;
-        }
-
-        const notes = await Note.find(query)
-            .sort({ updatedAt: -1 }) // Sort by most recently updated
-            .exec();
-
+        const userId = req.user.id;
+        const notes = await Note.find({ userId });
         res.status(200).json(notes);
     } catch (error) {
         console.error('Error fetching notes:', error);
-        res.status(500).json({ message: 'Failed to fetch notes', error: error.message });
+        res.status(500).json({ message: 'Error fetching notes', error: error.message });
     }
 };
 
-// Get a single note by ID
+/**
+ * Get notes for a specific lecture
+ */
+exports.getLectureNotes = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { lectureId } = req.params;
+
+        // Validate lectureId is a valid ObjectId
+        if (!mongoose.Types.ObjectId.isValid(lectureId)) {
+            return res.status(400).json({ message: `Invalid lecture ID: ${lectureId}` });
+        }
+
+        const notes = await Note.find({ userId, lectureId });
+        res.status(200).json(notes);
+    } catch (error) {
+        console.error('Error fetching lecture notes:', error);
+        res.status(500).json({ message: 'Error fetching notes', error: error.message });
+    }
+};
+
+/**
+ * Get a specific note by ID
+ */
 exports.getNote = async (req, res) => {
     try {
         const { id } = req.params;
-        let note;
 
-        // Try to find by MongoDB ObjectId if valid
-        if (mongoose.Types.ObjectId.isValid(id)) {
-            note = await Note.findById(id);
+        // Validate id is a valid ObjectId
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ message: `Invalid note ID: ${id}` });
         }
 
-        // If not found, try searching by string ID
-        if (!note) {
-            note = await Note.findOne({ id: id });
-        }
+        const note = await Note.findById(id);
 
         if (!note) {
             return res.status(404).json({ message: 'Note not found' });
+        }
+
+        // Check if note belongs to user
+        if (note.userId.toString() !== req.user.id.toString()) {
+            return res.status(403).json({ message: 'Not authorized to access this note' });
         }
 
         res.status(200).json(note);
     } catch (error) {
         console.error('Error fetching note:', error);
-        res.status(500).json({ message: 'Failed to fetch note', error: error.message });
+        res.status(500).json({ message: 'Error fetching note', error: error.message });
     }
 };
 
-// Create a new note or update if exists (upsert)
+/**
+ * Create or update a note
+ */
 exports.createNote = async (req, res) => {
     try {
-        const { id, title, content, userId, topic, lectureId } = req.body;
+        const { id, title, content, lectureId } = req.body;
+        const userId = req.user.id; // Use authenticated user's ID
 
-        if (!lectureId) {
-            return res.status(400).json({ message: 'Lecture ID is required' });
+        // Validate lectureId is a valid ObjectId
+        if (!mongoose.Types.ObjectId.isValid(lectureId)) {
+            return res.status(400).json({ message: `Invalid lecture ID: ${lectureId}` });
         }
 
-        // Check if note already exists for this user and lecture
-        let existingNote = await Note.findOne({ userId, lectureId });
-
-        if (existingNote) {
-            // Update the existing note
-            existingNote.title = title || existingNote.title;
-            existingNote.content = content;
-            if (topic) existingNote.topic = topic;
-
-            const savedNote = await existingNote.save();
-            return res.status(200).json(savedNote);
-        }
-
-        // Create a new note if none exists
-        const newNote = new Note({
-            id, // Store string ID if provided
-            title,
-            content,
-            userId,
-            lectureId,
-            topic: topic || 'general'
-        });
-
-        const savedNote = await newNote.save();
-        res.status(201).json(savedNote);
-    } catch (error) {
-        console.error('Error creating/updating note:', error);
-        res.status(500).json({ message: 'Failed to save note', error: error.message });
-    }
-};
-
-// Update an existing note - using upsert to ensure we have one note per lecture
-exports.updateNote = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { title, content, topic, userId, lectureId } = req.body;
-
-        if (!lectureId) {
-            return res.status(400).json({ message: 'Lecture ID is required' });
-        }
-
-        // Try to find the note by ID first
+        // Check if note exists (for update)
         let note;
-        if (mongoose.Types.ObjectId.isValid(id)) {
+
+        if (id && mongoose.Types.ObjectId.isValid(id)) {
             note = await Note.findById(id);
+
+            // Verify ownership
+            if (note && note.userId.toString() !== userId.toString()) {
+                return res.status(403).json({ message: 'Not authorized to modify this note' });
+            }
         }
 
-        if (!note && id) {
-            // Try to find by string ID
-            note = await Note.findOne({ id });
-        }
-
-        // If still not found, look for a note with this user and lecture
+        // If note doesn't exist, check if user already has a note for this lecture
         if (!note) {
             note = await Note.findOne({ userId, lectureId });
         }
 
+        // Create or update the note
         if (note) {
             // Update existing note
             note.title = title || note.title;
-            note.content = content || note.content;
-            if (topic) note.topic = topic;
-
-            const updatedNote = await note.save();
-            return res.status(200).json(updatedNote);
+            note.content = content;
+            await note.save();
         } else {
-            // Create a new note if none exists
-            const newNote = new Note({
-                title,
+            // Create new note
+            note = new Note({
+                title: title || 'Untitled Note',
                 content,
                 userId,
-                lectureId,
-                topic: topic || 'general'
+                lectureId
             });
-
-            const savedNote = await newNote.save();
-            return res.status(201).json(savedNote);
+            await note.save();
         }
+
+        res.status(200).json(note);
     } catch (error) {
-        console.error('Error updating note:', error);
-        res.status(500).json({ message: 'Failed to update note', error: error.message });
+        console.error('Error creating/updating note:', error);
+        res.status(500).json({ message: 'Error saving note', error: error.message });
     }
 };
 
-// Delete a note
+/**
+ * Delete a note
+ */
 exports.deleteNote = async (req, res) => {
     try {
         const { id } = req.params;
-        let deletedNote;
 
-        // Try to delete by MongoDB ObjectId if valid
-        if (mongoose.Types.ObjectId.isValid(id)) {
-            deletedNote = await Note.findByIdAndDelete(id);
+        // Validate id is a valid ObjectId
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ message: `Invalid note ID: ${id}` });
         }
 
-        // If not found, try deleting by string ID
-        if (!deletedNote) {
-            deletedNote = await Note.findOneAndDelete({ id: id });
-        }
+        const note = await Note.findById(id);
 
-        if (!deletedNote) {
+        if (!note) {
             return res.status(404).json({ message: 'Note not found' });
         }
 
+        // Check if note belongs to user
+        if (note.userId.toString() !== req.user.id.toString()) {
+            return res.status(403).json({ message: 'Not authorized to delete this note' });
+        }
+
+        await note.remove();
         res.status(200).json({ message: 'Note deleted successfully' });
     } catch (error) {
         console.error('Error deleting note:', error);
-        res.status(500).json({ message: 'Failed to delete note', error: error.message });
+        res.status(500).json({ message: 'Error deleting note', error: error.message });
     }
 };

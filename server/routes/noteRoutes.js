@@ -1,44 +1,24 @@
 const express = require('express');
 const router = express.Router();
 const noteController = require('../controllers/noteController');
+const { protect } = require('../middleware/authMiddleware');
 
-// Logging middleware
-router.use((req, res, next) => {
-    console.log(`[noteRoutes] ${req.method} ${req.originalUrl}`);
-    next();
-});
+// Apply auth middleware to all routes
+router.use(protect);
 
-// Get all notes for a user
-router.get('/user/:userId', noteController.getNotes);
+// GET /api/notes - Get all notes for current user
+router.get('/', noteController.getUserNotes);
 
-// Get all notes for a user in a specific lecture
-router.get('/user/:userId/lecture/:lectureId', noteController.getNotes);
+// GET /api/notes/lecture/:lectureId - Get notes for a specific lecture
+router.get('/lecture/:lectureId', noteController.getLectureNotes);
 
-// Get a specific note
+// GET /api/notes/:id - Get a specific note
 router.get('/:id', noteController.getNote);
 
-// Create a new note
-router.post('/', (req, res, next) => {
-    // Log request body for debugging
-    console.log('[noteRoutes] Creating note with data:', {
-        title: req.body.title,
-        userId: req.body.userId,
-        lectureId: req.body.lectureId
-    });
-    next();
-}, noteController.createNote);
+// POST /api/notes - Create or update a note
+router.post('/', noteController.createNote);
 
-// Update a note
-router.put('/:id', (req, res, next) => {
-    // Log request body for debugging
-    console.log('[noteRoutes] Updating note:', req.params.id, 'with data:', {
-        title: req.body.title,
-        lectureId: req.body.lectureId
-    });
-    next();
-}, noteController.updateNote);
-
-// Delete a note
+// DELETE /api/notes/:id - Delete a note
 router.delete('/:id', noteController.deleteNote);
 
 module.exports = router;

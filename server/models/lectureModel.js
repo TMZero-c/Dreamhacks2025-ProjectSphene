@@ -18,12 +18,12 @@ const lectureSchema = new mongoose.Schema({
         trim: true
     },
     createdBy: {
-        type: String,
+        type: mongoose.Schema.Types.ObjectId,
         required: true,
         ref: 'User'
     },
     participants: [{
-        type: String,
+        type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     }]
 }, {

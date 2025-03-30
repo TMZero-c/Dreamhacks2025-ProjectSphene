@@ -1,29 +1,17 @@
 const Lecture = require('../models/lectureModel');
+const mongoose = require('mongoose');
 
-// Get all lectures for a specific user (as creator or participant)
-exports.getUserLectures = async (req, res) => {
-    try {
-        const { userId } = req.params;
-
-        const lectures = await Lecture.find({
-            $or: [
-                { createdBy: userId },
-                { participants: userId }
-            ]
-        }).sort({ updatedAt: -1 });
-
-        res.status(200).json(lectures);
-    } catch (error) {
-        console.error('Error fetching lectures:', error);
-        res.status(500).json({ message: 'Failed to fetch lectures', error: error.message });
-    }
-};
-
-// Get a specific lecture by ID
+/**
+ * Get a specific lecture by ID
+ */
 exports.getLecture = async (req, res) => {
     try {
-        const { id } = req.params;
-        const lecture = await Lecture.findById(id);
+        // Validate ID to prevent CastError
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ message: `Invalid lecture ID: ${req.params.id}` });
+        }
+
+        const lecture = await Lecture.findById(req.params.id);
 
         if (!lecture) {
             return res.status(404).json({ message: 'Lecture not found' });
@@ -32,50 +20,76 @@ exports.getLecture = async (req, res) => {
         res.status(200).json(lecture);
     } catch (error) {
         console.error('Error fetching lecture:', error);
-        res.status(500).json({ message: 'Failed to fetch lecture', error: error.message });
+        res.status(500).json({ message: 'Error fetching lecture', error: error.message });
     }
 };
 
-// Create a new lecture
+/**
+ * Get all lectures for the current user (created or joined)
+ */
+exports.getUserLectures = async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        // Find lectures where user is creator or participant
+        const lectures = await Lecture.find({
+            $or: [
+                { createdBy: userId },
+                { participants: userId }
+            ]
+        });
+
+        res.status(200).json(lectures);
+    } catch (error) {
+        console.error('Error fetching user lectures:', error);
+        res.status(500).json({ message: 'Error fetching lectures', error: error.message });
+    }
+};
+
+/**
+ * Create a new lecture
+ */
 exports.createLecture = async (req, res) => {
     try {
-        const { title, description, code, createdBy } = req.body;
+        const { title, description } = req.body;
 
-        // Check if lecture with same code already exists
-        const existingLecture = await Lecture.findOne({ code });
-        if (existingLecture) {
-            return res.status(400).json({ message: 'A lecture with this code already exists' });
-        }
+        // Generate a unique 6-character code
+        const code = generateUniqueCode();
 
-        const newLecture = new Lecture({
+        const lecture = new Lecture({
             title,
             description,
             code,
-            createdBy,
-            participants: [createdBy]
+            createdBy: req.user.id,
+            participants: [req.user.id] // Creator is also a participant
         });
 
-        const savedLecture = await newLecture.save();
+        const savedLecture = await lecture.save();
         res.status(201).json(savedLecture);
     } catch (error) {
         console.error('Error creating lecture:', error);
-        res.status(500).json({ message: 'Failed to create lecture', error: error.message });
+        res.status(500).json({ message: 'Error creating lecture', error: error.message });
     }
 };
 
-// Join a lecture using code
+/**
+ * Join a lecture using a code
+ */
 exports.joinLecture = async (req, res) => {
     try {
-        const { code, userId } = req.body;
+        const { code } = req.body;
+        const userId = req.user.id;
 
+        // Find lecture by code
         const lecture = await Lecture.findOne({ code });
+
         if (!lecture) {
-            return res.status(404).json({ message: 'Lecture not found with this code' });
+            return res.status(404).json({ message: 'Lecture not found with that code' });
         }
 
         // Check if user is already a participant
         if (lecture.participants.includes(userId)) {
-            return res.status(200).json({ message: 'Already joined this lecture', lecture });
+            return res.status(200).json({ message: 'Already a participant', lecture });
         }
 
         // Add user to participants
@@ -85,9 +99,25 @@ exports.joinLecture = async (req, res) => {
         res.status(200).json(lecture);
     } catch (error) {
         console.error('Error joining lecture:', error);
-        res.status(500).json({ message: 'Failed to join lecture', error: error.message });
+        res.status(500).json({ message: 'Error joining lecture', error: error.message });
     }
 };
+
+/**
+ * Generate a random 6-character code for lectures
+ */
+function generateUniqueCode() {
+    const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed similar looking characters
+    let code = '';
+
+    // Generate a 6-character code
+    for (let i = 0; i < 6; i++) {
+        const randomIndex = Math.floor(Math.random() * characters.length);
+        code += characters.charAt(randomIndex);
+    }
+
+    return code;
+}
 
 // Update lecture details
 exports.updateLecture = async (req, res) => {

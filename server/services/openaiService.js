@@ -378,8 +378,8 @@ function parseSuggestionsFromResponse(responseContent, noteId, sourceUserId) {
                 type: suggestion.type || 'missing_content', // Default type if missing
                 content: validContent,
                 insertionPoint: insertionPoint,
-                noteId: noteId.toString(), // Convert to string to ensure compatibility
-                source: `User ${sourceUserId}`,
+                noteId: noteId, // Don't convert to string - use ObjectId as is
+                source: sourceUserId ? `User ${sourceUserId}` : 'AI Assistant',
                 status: 'pending'
             };
         }).filter(s => s.content !== null);

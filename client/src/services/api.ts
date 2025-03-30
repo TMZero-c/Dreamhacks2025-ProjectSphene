@@ -1,40 +1,89 @@
 import { Note, Suggestion, Lecture } from '../types/types';
+import axios from 'axios';
 
 // API base URL
-const API_URL = 'http://localhost:5000/api';
+export const API_URL = process.env.NODE_ENV === 'production'
+    ? '/api' // In production, API calls are relative to the same domain
+    : 'http://localhost:5000/api'; // In development, use localhost
 
+// Configure axios
+const api = axios.create({
+    baseURL: API_URL,
+    withCredentials: true
+});
+
+// Add request handlers
+api.interceptors.request.use(config => {
+    const token = localStorage.getItem('auth_token');
+    const devUserId = localStorage.getItem('dev_user_id');
+
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    } else if (process.env.NODE_ENV === 'development' && devUserId) {
+        // For development, use a special dev token format
+        config.headers.Authorization = `DevToken ${devUserId}`;
+    }
+
+    return config;
+}, error => {
+    return Promise.reject(error);
+});
+
+// Add response handlers with retry logic
+api.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        const originalRequest = error.config;
+
+        // If we don't have a config or we've already retried, reject the promise
+        if (!originalRequest || originalRequest._retry) {
+            return Promise.reject(error);
+        }
+
+        // Handle rate limit (429) errors
+        if (error.response && error.response.status === 429) {
+            console.warn('Rate limit hit. Retrying after delay...');
+
+            // Mark that we're retrying this request
+            originalRequest._retry = true;
+
+            // Wait for a random amount of time (300-800ms) to prevent stampeding
+            const delay = 300 + Math.random() * 500;
+            await new Promise(resolve => setTimeout(resolve, delay));
+
+            // Retry the request
+            return api(originalRequest);
+        }
+
+        // For 401 errors, could handle token refresh here
+        // For now, just reject other errors
+        return Promise.reject(error);
+    }
+);
 
 // Fetch lectures for a user (created or joined)
-export async function fetchUserLectures(userId: string): Promise<Lecture[]> {
-    console.log(`Fetching lectures for user: ${userId}`);
-
+export async function fetchUserLectures(): Promise<Lecture[]> {
     try {
-        const response = await fetch(`${API_URL}/lectures/user/${userId}`);
-        if (!response.ok) {
-            throw new Error(`Error: ${response.status}`);
+        // Add a small random delay to prevent simultaneous requests
+        if (process.env.NODE_ENV === 'development') {
+            await new Promise(resolve => setTimeout(resolve, Math.random() * 100));
         }
-        return await response.json();
+
+        const response = await api.get('/lectures/user');
+        return response.data;
     } catch (error) {
         console.error('Error fetching lectures:', error);
+
+        // Return an empty array rather than throwing for this particular method
         return [];
     }
 }
 
 // Create a new lecture
 export async function createLecture(lecture: Partial<Lecture>): Promise<Lecture> {
-
     try {
-        const response = await fetch(`${API_URL}/lectures`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(lecture)
-        });
-
-        if (!response.ok) {
-            throw new Error(`Error: ${response.status}`);
-        }
-
-        return await response.json();
+        const response = await api.post('/lectures', lecture);
+        return response.data;
     } catch (error) {
         console.error('Error creating lecture:', error);
         throw error;
@@ -42,21 +91,10 @@ export async function createLecture(lecture: Partial<Lecture>): Promise<Lecture>
 }
 
 // Join a lecture using code
-export async function joinLecture(code: string, userId: string): Promise<Lecture> {
-
-
+export async function joinLecture(code: string): Promise<Lecture> {
     try {
-        const response = await fetch(`${API_URL}/lectures/join`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code, userId })
-        });
-
-        if (!response.ok) {
-            throw new Error(`Error: ${response.status}`);
-        }
-
-        return await response.json();
+        const response = await api.post('/lectures/join', { code });
+        return response.data;
     } catch (error) {
         console.error('Error joining lecture:', error);
         throw error;
@@ -64,136 +102,72 @@ export async function joinLecture(code: string, userId: string): Promise<Lecture
 }
 
 // Fetch notes for a specific user and lecture
-export async function fetchNotes(userId: string, lectureId?: string): Promise<Note[]> {
-    console.log(`Fetching notes for user: ${userId}${lectureId ? ` and lecture: ${lectureId}` : ''}`);
-
-
-
+export async function fetchNotes(lectureId?: string): Promise<Note[]> {
     try {
         const endpoint = lectureId
-            ? `${API_URL}/notes/user/${userId}/lecture/${lectureId}`
-            : `${API_URL}/notes/user/${userId}`;
+            ? `/notes/lecture/${lectureId}`
+            : `/notes`;
 
-        const response = await fetch(endpoint);
-        if (!response.ok) {
-            throw new Error(`Error: ${response.status}`);
-        }
-        return await response.json();
+        const response = await api.get(endpoint);
+        return response.data;
     } catch (error) {
         console.error('Error fetching notes:', error);
         return [];
     }
-
 }
 
 // Save a note - handle both create and update
 export async function saveNote(note: Note): Promise<Note> {
-    console.log(`Saving note for user: ${note.userId} in lecture: ${note.lectureId}`);
-
-
     try {
-        // Always use POST for simplicity (server handles upsert)
-        const response = await fetch(`${API_URL}/notes`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(note)
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Error response:', errorText);
-            throw new Error(`Error: ${response.status} - ${errorText}`);
-        }
-
-        const savedNote = await response.json();
-        console.log('Note saved successfully:', savedNote);
-        return savedNote;
+        const response = await api.post('/notes', note);
+        console.log('Note saved successfully:', response.data);
+        return response.data;
     } catch (error) {
         console.error('Error saving note:', error);
         throw error;
     }
-
 }
 
 // Trigger document comparison via the backend
 export async function triggerDocumentComparison(
     noteId?: string,
-    lectureId?: string,
-    userId?: string
+    lectureId?: string
 ): Promise<{ message: string; suggestions?: Suggestion[] }> {
-    console.log(`Triggering document comparison: ${noteId ? `noteId=${noteId}` : `lectureId=${lectureId}, userId=${userId}`}`);
-
     try {
-        if (!noteId && (!lectureId || !userId)) {
-            throw new Error('Either noteId or both lectureId and userId are required');
+        if (!noteId && !lectureId) {
+            throw new Error('Either noteId or lectureId is required');
         }
 
-        console.log(`Sending request to ${API_URL}/suggestions/compare`);
-        const response = await fetch(`${API_URL}/suggestions/compare`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ noteId, lectureId, userId })
-        });
+        const response = await api.post('/suggestions/compare',
+            { noteId, lectureId }
+        );
 
-        // Log the raw response for debugging
-        const responseText = await response.text();
-        console.log('Raw server response:', responseText);
-
-        // Parse the response if possible
-        let data;
-        try {
-            data = JSON.parse(responseText);
-        } catch (e) {
-            console.error('Error parsing response:', e);
-            throw new Error('Invalid response from server');
-        }
-
-        if (!response.ok) {
-            console.error('Error response from server:', data);
-            throw new Error(data?.message || `Server responded with ${response.status}`);
-        }
-
-        console.log(`Comparison complete, response:`, data);
-        return data;
+        console.log(`Comparison complete, response:`, response.data);
+        return response.data;
     } catch (error) {
         console.error('Error triggering document comparison:', error);
         throw error;
     }
 }
 
-/**
- * Fetches AI-generated suggestions for a specific note
- */
+// Fetches AI-generated suggestions for a specific note
 export async function fetchSuggestions(
     noteId?: string | null,
-    lectureId?: string,
-    userId?: string
+    lectureId?: string
 ): Promise<Suggestion[]> {
-    console.log(`Fetching suggestions: ${noteId ? `noteId=${noteId}` : `lectureId=${lectureId}, userId=${userId}`}`);
-
     try {
         let endpoint;
         if (noteId) {
-            endpoint = `${API_URL}/suggestions/note/${noteId}`;
-        } else if (lectureId && userId) {
-            endpoint = `${API_URL}/suggestions/lecture/${lectureId}/user/${userId}`;
+            endpoint = `/suggestions/note/${noteId}`;
+        } else if (lectureId) {
+            endpoint = `/suggestions/lecture/${lectureId}`;
         } else {
-            throw new Error('Either noteId or both lectureId and userId are required');
+            throw new Error('Either noteId or lectureId is required');
         }
 
-        const response = await fetch(endpoint);
-
-        if (!response.ok) {
-            throw new Error(`Error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log(`Fetched ${data.length} suggestions from API`);
-        return data;
+        const response = await api.get(endpoint);
+        console.log(`Fetched ${response.data.length} suggestions from API`);
+        return response.data;
     } catch (error) {
         console.error('Error fetching suggestions:', error);
         return [];
@@ -202,24 +176,10 @@ export async function fetchSuggestions(
 
 // Accept or dismiss a suggestion
 export async function respondToSuggestion(suggestionId: string, action: 'accept' | 'dismiss'): Promise<void> {
-
-
     console.log(`Sending ${action} request for suggestion: ${suggestionId}`);
 
     try {
-        const response = await fetch(`${API_URL}/suggestions/${suggestionId}/respond`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ action })
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(`Server responded with ${response.status}: ${errorData.message || response.statusText}`);
-        }
-
+        await api.post(`/suggestions/${suggestionId}/respond`, { action });
         console.log(`Successfully ${action}ed suggestion ${suggestionId}`);
     } catch (error) {
         console.error(`Error ${action}ing suggestion:`, error);
@@ -230,29 +190,19 @@ export async function respondToSuggestion(suggestionId: string, action: 'accept'
 // Delete all suggestions for a specific note or lecture+user
 export async function deleteAllSuggestions(
     noteId?: string | null,
-    lectureId?: string,
-    userId?: string
+    lectureId?: string
 ): Promise<void> {
-    console.log(`Deleting all suggestions: ${noteId ? `noteId=${noteId}` : `lectureId=${lectureId}, userId=${userId}`}`);
-
     try {
         let endpoint;
         if (noteId) {
-            endpoint = `${API_URL}/suggestions/note/${noteId}`;
-        } else if (lectureId && userId) {
-            endpoint = `${API_URL}/suggestions/lecture/${lectureId}/user/${userId}`;
+            endpoint = `/suggestions/note/${noteId}`;
+        } else if (lectureId) {
+            endpoint = `/suggestions/lecture/${lectureId}`;
         } else {
-            throw new Error('Either noteId or both lectureId and userId are required');
+            throw new Error('Either noteId or lectureId is required');
         }
 
-        const response = await fetch(endpoint, {
-            method: 'DELETE'
-        });
-
-        if (!response.ok) {
-            throw new Error(`Error: ${response.status}`);
-        }
-
+        await api.delete(endpoint);
         console.log('Successfully deleted all suggestions');
     } catch (error) {
         console.error('Error deleting suggestions:', error);

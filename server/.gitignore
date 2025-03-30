@@ -25,4 +25,13 @@ dist-ssr
 
 config/serviceAccountKey.json
 node_modules/
+
 .env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.example
+config/serviceAccountKey.json
+node_modules/
+.env*

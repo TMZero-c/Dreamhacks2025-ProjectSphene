@@ -21,8 +21,8 @@ export interface Lecture {
     code: string;
     createdBy: string;
     participants: string[];
-    createdAt: Date;
-    updatedAt: Date;
+    createdAt?: string;
+    updatedAt?: string;
 }
 
 export interface InsertionPoint {

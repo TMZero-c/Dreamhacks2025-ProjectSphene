@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const noteSchema = new mongoose.Schema({
     id: {
-        type: String // Add this field to support string IDs from frontend
+        type: String // Client-side ID
     },
     title: {
         type: String,
@@ -15,7 +15,7 @@ const noteSchema = new mongoose.Schema({
         required: true
     },
     userId: {
-        type: String,
+        type: mongoose.Schema.Types.ObjectId,
         required: true,
         ref: 'User'
     },

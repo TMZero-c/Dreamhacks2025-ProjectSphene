@@ -4,19 +4,18 @@ import { fetchUserLectures, createLecture, joinLecture } from '../services/api';
 import './LectureSelector.css';
 
 interface LectureSelectorProps {
-    userId: string;
     selectedLecture?: Lecture | null;
     onLectureSelect: (lecture: Lecture) => void;
 }
 
 const LectureSelector: React.FC<LectureSelectorProps> = ({
-    userId,
     selectedLecture,
     onLectureSelect
 }) => {
     const [lectures, setLectures] = useState<Lecture[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [retryCount, setRetryCount] = useState(0);
 
     // UI state
     const [showCreateForm, setShowCreateForm] = useState(false);
@@ -27,60 +26,59 @@ const LectureSelector: React.FC<LectureSelectorProps> = ({
     const [newLectureDescription, setNewLectureDescription] = useState('');
     const [joinCode, setJoinCode] = useState('');
 
-    // Load lectures when component mounts or userId changes
+    // Load lectures when component mounts
     useEffect(() => {
-        loadLectures();
-    }, [userId]);
+        const loadLectures = async () => {
+            if (loading) return; // Prevent multiple simultaneous requests
 
-    const loadLectures = async () => {
-        if (!userId) return;
+            setLoading(true);
+            try {
+                const data = await fetchUserLectures();
+                setLectures(data);
+                setError(null);
+                setRetryCount(0);
+            } catch (err) {
+                console.error('Failed to load lectures:', err);
+                setError('Failed to load your lectures');
 
-        setLoading(true);
-        setError(null);
-
-        try {
-            const userLectures = await fetchUserLectures(userId);
-            setLectures(userLectures);
-
-            // If no lecture is selected and we have lectures, select the first one
-            if (!selectedLecture && userLectures.length > 0) {
-                onLectureSelect(userLectures[0]);
+                // Implement retry with exponential backoff if we haven't retried too many times
+                if (retryCount < 3) {
+                    const delay = Math.pow(2, retryCount) * 1000 + Math.random() * 1000;
+                    setTimeout(() => {
+                        setRetryCount(prev => prev + 1);
+                        // This will trigger the effect again
+                    }, delay);
+                }
+            } finally {
+                setLoading(false);
             }
-        } catch (err) {
-            console.error('Failed to load lectures:', err);
-            setError('Failed to load your lectures');
-        } finally {
-            setLoading(false);
-        }
-    };
+        };
+
+        loadLectures();
+    }, [retryCount]);
 
     const handleCreateLecture = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newLectureTitle.trim()) return;
 
         setLoading(true);
+        setError(null);
         try {
-            // Generate a random 6-character code
-            const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-
-            const createdLecture = await createLecture({
+            const newLecture = await createLecture({
                 title: newLectureTitle,
-                description: newLectureDescription,
-                code,
-                createdBy: userId
+                description: newLectureDescription
             });
 
-            // Add to lectures list and select it
-            setLectures(prev => [...prev, createdLecture]);
-            onLectureSelect(createdLecture);
+            setLectures(prev => [...prev, newLecture]);
+            onLectureSelect(newLecture);
 
             // Reset form
             setNewLectureTitle('');
             setNewLectureDescription('');
             setShowCreateForm(false);
-        } catch (err) {
+        } catch (err: any) {
             console.error('Failed to create lecture:', err);
-            setError('Failed to create lecture');
+            setError(err.response?.data?.message || 'Failed to create lecture. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -92,15 +90,15 @@ const LectureSelector: React.FC<LectureSelectorProps> = ({
 
         setLoading(true);
         try {
-            const joinedLecture = await joinLecture(joinCode.trim(), userId);
+            const lecture = await joinLecture(joinCode.trim());
 
             // Check if already in lectures list
-            const exists = lectures.some(l => l._id === joinedLecture._id);
+            const exists = lectures.some(l => l._id === lecture._id);
             if (!exists) {
-                setLectures(prev => [...prev, joinedLecture]);
+                setLectures(prev => [...prev, lecture]);
             }
 
-            onLectureSelect(joinedLecture);
+            onLectureSelect(lecture);
             setJoinCode('');
             setShowJoinForm(false);
         } catch (err) {
@@ -122,6 +120,7 @@ const LectureSelector: React.FC<LectureSelectorProps> = ({
                             setShowJoinForm(false);
                         }}
                         className="small-button"
+                        disabled={loading}
                     >
                         Create
                     </button>
@@ -131,13 +130,27 @@ const LectureSelector: React.FC<LectureSelectorProps> = ({
                             setShowCreateForm(false);
                         }}
                         className="small-button"
+                        disabled={loading}
                     >
                         Join
                     </button>
                 </div>
             </div>
 
-            {error && <div className="error-message">{error}</div>}
+            {error && (
+                <div className="error-message">
+                    {error}
+                    <button
+                        onClick={() => {
+                            setError(null);
+                            setRetryCount(prev => prev + 1); // Trigger a retry
+                        }}
+                        className="retry-button"
+                    >
+                        Retry
+                    </button>
+                </div>
+            )}
 
             {showCreateForm && (
                 <form className="form-panel" onSubmit={handleCreateLecture}>
@@ -180,8 +193,10 @@ const LectureSelector: React.FC<LectureSelectorProps> = ({
                 </form>
             )}
 
-            {loading && !showCreateForm && !showJoinForm && (
-                <div className="loading-indicator">Loading lectures...</div>
+            {loading && (
+                <div className="loading-indicator">
+                    {retryCount > 0 ? `Retrying (${retryCount})...` : 'Loading lectures...'}
+                </div>
             )}
 
             <div className="lecture-list">
