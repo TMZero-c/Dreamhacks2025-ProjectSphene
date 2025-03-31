@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, forwardRef, useImperativeHandle } from 'react';
-import ReactQuill from 'react-quill';
+import ReactQuill, { UnprivilegedEditor } from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import { Delta as QuillDelta } from 'quill';
 import './TextEditor.css';
@@ -11,8 +11,13 @@ interface TextEditorProps {
     showSuggestions?: boolean;
 }
 
+interface TextEditorRef {
+    getEditor: () => ReactQuill['editor'];
+    updateState: () => void;
+}
+
 // Use forwardRef to expose the Quill editor to parent components
-const TextEditor = forwardRef<any, TextEditorProps>((props, ref) => {
+const TextEditor = forwardRef<TextEditorRef, TextEditorProps>((props, ref) => {
     const { content, onSave, onToggleSuggestions, showSuggestions } = props;
     const [value, setValue] = useState<QuillDelta | null>(null);
     const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving'>('saved');
@@ -38,7 +43,7 @@ const TextEditor = forwardRef<any, TextEditorProps>((props, ref) => {
                 // Try to parse the content as Delta JSON
                 const deltaContent = JSON.parse(content);
                 setValue(deltaContent);
-            } catch (e) {
+            } catch {
                 // If parsing fails (first load or content is HTML), 
                 // set content directly and let Quill handle it
                 quillRef.current.getEditor().clipboard.dangerouslyPasteHTML(content);
@@ -48,9 +53,9 @@ const TextEditor = forwardRef<any, TextEditorProps>((props, ref) => {
         }
     }, [content]);
 
-    const handleChange = (_content: string, _delta: any, _source: any, editor: any) => {
+    const handleChange = (_content: string, _delta: QuillDelta, _source: 'user' | 'api' | 'silent', editor: UnprivilegedEditor) => {
         // Only update if the change came from user input, not programmatic changes
-        if (_source === 'user') {
+        if (_source === 'user' && editor) {
             setValue(editor.getContents());
             setSaveStatus('unsaved');
         }

@@ -5,7 +5,8 @@ import Header from './components/Header'
 import SuggestionPanel from './components/SuggestionPanel'
 import LectureSelector from './components/LectureSelector'
 import { AuthContainer } from './components/AuthComponents'
-import { useAuth } from './contexts/AuthContext'
+import { useAuth } from './contexts/authUtils'
+import ReactQuill from 'react-quill' // Import ReactQuill for its types
 
 import { Note, Lecture } from './types/types'
 import { fetchNotes, saveNote, fetchUserLectures, createLecture } from './services/api'
@@ -25,21 +26,27 @@ function App() {
   const [selectedLecture, setSelectedLecture] = useState<Lecture | null>(null);
   const [loading, setLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const editorRef = useRef(null);
+  const editorRef = useRef<ReactQuill>(null); // Properly type the ref as ReactQuill
 
   // Add a reference to track the currently selected lecture to prevent race conditions
   const currentOperation = useRef<string | null>(null);
   const lastSelectedLectureId = useRef<string | null>(null);
+  const initialLoadComplete = useRef<boolean>(false);
 
   // Load initial lectures when the app starts and user is authenticated
   useEffect(() => {
-    if (user) {
+    if (user && !initialLoadComplete.current) {
       loadInitialLectures();
     }
   }, [user]);
 
   const loadInitialLectures = async () => {
+    // Prevent duplicate loads
+    if (initialLoadComplete.current) return;
+
     setLoading(true);
+    initialLoadComplete.current = true;
+
     try {
       const lectures = await fetchUserLectures();
 
@@ -56,6 +63,7 @@ function App() {
       }
     } catch (error) {
       console.error('Failed to load initial lectures:', error);
+      initialLoadComplete.current = false; // Reset so we can try again
     } finally {
       setLoading(false);
     }

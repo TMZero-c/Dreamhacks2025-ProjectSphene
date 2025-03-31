@@ -12,6 +12,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const path = require('path');
 const { setupSecurity, errorHandler } = require('./middleware/securityMiddleware');
+const { apiLimiter, authLimiter, lectureLimiter } = require('./middleware/rateLimitMiddleware');
 const authRoutes = require('./routes/authRoutes');
 const lectureRoutes = require('./routes/lectureRoutes');
 const noteRoutes = require('./routes/noteRoutes');
@@ -22,6 +23,13 @@ const app = express();
 
 // Apply security middleware
 setupSecurity(app);
+
+// Apply rate limiting middleware to routes
+// Higher limits for lecture routes which are called frequently
+app.use('/api/lectures', lectureLimiter);
+app.use('/api/auth', authLimiter);
+// Apply general API rate limiter to other routes
+app.use('/api', apiLimiter);
 
 // API Routes
 app.use('/api/auth', authRoutes);

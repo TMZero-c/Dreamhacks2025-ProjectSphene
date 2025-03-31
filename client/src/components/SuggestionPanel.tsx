@@ -4,10 +4,49 @@ import SuggestionItem from './SuggestionItem';
 import { Suggestion } from '../types/types';
 import './SuggestionPanel.css';
 
+// Add interfaces for Quill types
+interface QuillEditor {
+    getLength(): number;
+    getText(): string;
+    getSelection(): { index: number, length: number } | null;
+    insertText(index: number, text: string): void;
+    updateContents(delta: QuillDelta): void;
+    setSelection(index: number, length: number): void;
+}
+
+interface QuillInstance {
+    getEditor(): QuillEditor;
+    updateState?(): void;
+}
+
+interface QuillDeltaOperation {
+    insert?: string | object;
+    delete?: number;
+    retain?: number;
+    attributes?: Record<string, unknown>;
+}
+
+interface QuillDelta {
+    ops?: QuillDeltaOperation[];
+}
+
+interface ApiError {
+    message?: string;
+    response?: {
+        data?: {
+            message?: string;
+            errors?: Array<{
+                param: string;
+                msg: string;
+            }>;
+        }
+    }
+}
+
 interface SuggestionPanelProps {
     noteId?: string; // Make noteId optional
     lectureId: string; // Make lectureId required
-    quillRef: React.RefObject<any>;
+    quillRef: React.RefObject<QuillInstance>;
     visible: boolean;
 }
 
@@ -49,61 +88,12 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
     });
 
     // Only clear errors when explicitly dismissed by user
-    const clearError = () => {
+    const clearError = useCallback(() => {
         setError(null);
-    };
-
-    // Fetch suggestions when the panel becomes visible or lectureId/noteId changes
-    useEffect(() => {
-        if (visible && (noteId || lectureId)) {
-            // Reset our reference flags when note or lecture changes
-            if (hasFetched.current && hasTriggeredGeneration.current) {
-                hasFetched.current = false;
-                hasTriggeredGeneration.current = false;
-            }
-
-            if (!hasFetched.current) {
-                (async () => {
-                    hasFetched.current = true;
-                    console.log(`Fetching suggestions for ${noteId ? `note: ${noteId}` : `lecture: ${lectureId}`}`);
-                    setLoading(true);
-                    try {
-                        // Use either noteId or lectureId to fetch suggestions
-                        const fetchedSuggestions = noteId
-                            ? await fetchSuggestions(noteId)
-                            : await fetchSuggestions(null, lectureId);
-
-                        console.log(`Fetched ${fetchedSuggestions.length} suggestions`);
-                        setSuggestions(fetchedSuggestions);
-
-                        // If no suggestions found and we haven't triggered generation yet, do it automatically
-                        if (fetchedSuggestions.length === 0 && !hasTriggeredGeneration.current) {
-                            console.log("No suggestions found, automatically triggering generation");
-                            handleGenerateSuggestions();
-                        }
-                    } catch (error) {
-                        console.error('Error loading suggestions:', error);
-                        setError('Failed to load suggestions');
-                    } finally {
-                        setLoading(false);
-                    }
-                })();
-            }
-        }
-    }, [visible, noteId, lectureId]);
-
-    // Reset guard when dependencies change
-    useEffect(() => {
-        hasFetched.current = false;
-        hasTriggeredGeneration.current = false;
-        documentModifications.current = {
-            appliedSuggestions: [],
-            originalText: null
-        };
-    }, [noteId, lectureId]);
+    }, []);
 
     // Generate new suggestions using AI
-    const handleGenerateSuggestions = async () => {
+    const handleGenerateSuggestions = useCallback(async () => {
         if (activeOperation.current === 'generateSuggestions') return;
 
         // Validate the necessary IDs
@@ -157,9 +147,10 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
                     console.error('Error fetching new suggestions:', error);
                 }
             }, 1000);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Failed to generate suggestions:', err);
-            setError(`Failed to generate suggestions: ${err?.message || 'Unknown error'}`);
+            const error = err as ApiError;
+            setError(`Failed to generate suggestions: ${error?.message || 'Unknown error'}`);
         } finally {
             setGenerating(false);
             activeOperation.current = null;
@@ -169,7 +160,56 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
                 setIsGenerateButtonDisabled(false);
             }, 2000); // Longer delay for generate button to prevent rapid clicking
         }
-    };
+    }, [noteId, lectureId, clearError]);
+
+    // Fetch suggestions when the panel becomes visible or lectureId/noteId changes
+    useEffect(() => {
+        if (visible && (noteId || lectureId)) {
+            // Reset our reference flags when note or lecture changes
+            if (hasFetched.current && hasTriggeredGeneration.current) {
+                hasFetched.current = false;
+                hasTriggeredGeneration.current = false;
+            }
+
+            if (!hasFetched.current) {
+                (async () => {
+                    hasFetched.current = true;
+                    console.log(`Fetching suggestions for ${noteId ? `note: ${noteId}` : `lecture: ${lectureId}`}`);
+                    setLoading(true);
+                    try {
+                        // Use either noteId or lectureId to fetch suggestions
+                        const fetchedSuggestions = noteId
+                            ? await fetchSuggestions(noteId)
+                            : await fetchSuggestions(null, lectureId);
+
+                        console.log(`Fetched ${fetchedSuggestions.length} suggestions`);
+                        setSuggestions(fetchedSuggestions);
+
+                        // If no suggestions found and we haven't triggered generation yet, do it automatically
+                        if (fetchedSuggestions.length === 0 && !hasTriggeredGeneration.current) {
+                            console.log("No suggestions found, automatically triggering generation");
+                            handleGenerateSuggestions();
+                        }
+                    } catch (error) {
+                        console.error('Error loading suggestions:', error);
+                        setError('Failed to load suggestions');
+                    } finally {
+                        setLoading(false);
+                    }
+                })();
+            }
+        }
+    }, [visible, noteId, lectureId, handleGenerateSuggestions]);
+
+    // Reset guard when dependencies change
+    useEffect(() => {
+        hasFetched.current = false;
+        hasTriggeredGeneration.current = false;
+        documentModifications.current = {
+            appliedSuggestions: [],
+            originalText: null
+        };
+    }, [noteId, lectureId]);
 
     // Handle removing all suggestions
     const handleRemoveAllSuggestions = async () => {
@@ -299,10 +339,10 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
     };
 
     // Helper function to calculate Quill Delta content length
-    const calculateDeltaLength = (delta: any): number => {
+    const calculateDeltaLength = (delta: QuillDelta): number => {
         if (!delta || !delta.ops) return 0;
 
-        return delta.ops.reduce((length: number, op: any) => {
+        return delta.ops.reduce((length: number, op: QuillDeltaOperation) => {
             if (typeof op.insert === 'string') {
                 return length + op.insert.length;
             }
@@ -312,12 +352,11 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
 
     // Enhanced insertion point finder with fuzzy matching for better accuracy
     const findBestInsertionPoint = (
-        editor: any,
+        editor: QuillEditor,
         contentMarker: string,
         position: 'before' | 'after'
     ): number => {
-        const currentText = editor.getText();
-        const originalText = documentModifications.current.originalText || currentText;
+        const currentText = editor.getText()
 
         // Adjust marker position based on previous insertions
         let markerIndex = currentText.indexOf(contentMarker);
@@ -353,7 +392,7 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
             });
 
             if (position === 'after') {
-                let insertAfter = markerIndex + contentMarker.length;
+                const insertAfter = markerIndex + contentMarker.length;
                 const nextNewline = currentText.indexOf('\n', insertAfter);
                 return nextNewline >= 0 && nextNewline - insertAfter < 100 ?
                     nextNewline + 1 : insertAfter;
@@ -464,7 +503,7 @@ const SuggestionPanel: React.FC<SuggestionPanelProps> = ({
 };
 
 // Helper function for logging
-const formatLog = (type: string, message: string, data: any = null) => {
+const formatLog = (type: string, message: string, data: Record<string, unknown> | null = null) => {
     const timestamp = new Date().toISOString();
     console.log(`[SuggestionPanel][${timestamp}][${type}] ${message}`, data || '');
 };

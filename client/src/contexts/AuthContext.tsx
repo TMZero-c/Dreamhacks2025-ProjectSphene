@@ -1,27 +1,6 @@
-import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
-import { AuthUser, getCurrentUser, isAuthenticated, getUser, logout } from '../services/authService';
-
-interface AuthContextType {
-    isAuthenticated: boolean;
-    user: AuthUser | null;
-    loading: boolean;
-    error: string | null;
-    login: (user: AuthUser) => void;
-    logout: () => Promise<void>;
-    checkAuth: () => Promise<boolean>;
-}
-
-const AuthContext = createContext<AuthContextType>({
-    isAuthenticated: false,
-    user: null,
-    loading: true,
-    error: null,
-    login: () => { },
-    logout: async () => { },
-    checkAuth: async () => false
-});
-
-export const useAuth = () => useContext(AuthContext);
+import React, { useState, useEffect, ReactNode } from 'react';
+import { AuthUser, getCurrentUser, isAuthenticated, logout } from '../services/authService';
+import { AuthContext } from './authUtils';
 
 interface AuthProviderProps {
     children: ReactNode;
@@ -88,8 +67,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 }));
                 return false;
             }
-
-            const userFromStorage = getUser();
 
             // Verify with server (only if we have a token)
             try {

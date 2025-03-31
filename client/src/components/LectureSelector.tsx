@@ -1,12 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Lecture } from '../types/types';
 import { fetchUserLectures, createLecture, joinLecture } from '../services/api';
 import './LectureSelector.css';
+
+// Add interface for API error response
+interface ApiError {
+    message?: string;
+    response?: {
+        data?: {
+            message?: string;
+        }
+    }
+}
 
 interface LectureSelectorProps {
     selectedLecture?: Lecture | null;
     onLectureSelect: (lecture: Lecture) => void;
 }
+
+// Add a cache key for request tracking
+const REQUEST_CACHE_KEY = 'last_lecture_fetch';
 
 const LectureSelector: React.FC<LectureSelectorProps> = ({
     selectedLecture,
@@ -16,6 +29,7 @@ const LectureSelector: React.FC<LectureSelectorProps> = ({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [retryCount, setRetryCount] = useState(0);
+    const loadingRef = useRef(false); // Use ref to track loading state across renders
 
     // UI state
     const [showCreateForm, setShowCreateForm] = useState(false);
@@ -26,17 +40,48 @@ const LectureSelector: React.FC<LectureSelectorProps> = ({
     const [newLectureDescription, setNewLectureDescription] = useState('');
     const [joinCode, setJoinCode] = useState('');
 
+    // Add request throttling
+    const lastFetchRef = useRef<number>(0);
+    const MIN_FETCH_INTERVAL = 2000; // Minimum 2 seconds between requests
+
     // Load lectures when component mounts
     useEffect(() => {
         const loadLectures = async () => {
-            if (loading) return; // Prevent multiple simultaneous requests
+            // Prevent duplicate requests using ref
+            if (loadingRef.current) return;
 
+            // Check if we've fetched recently
+            const now = Date.now();
+            const timeSinceLastFetch = now - lastFetchRef.current;
+
+            if (timeSinceLastFetch < MIN_FETCH_INTERVAL && lectures.length > 0) {
+                console.log('Skipping fetch - too soon since last request');
+                return;
+            }
+
+            loadingRef.current = true;
             setLoading(true);
+
             try {
-                const data = await fetchUserLectures();
+                // Use sessionStorage to cache results
+                const cachedData = sessionStorage.getItem(REQUEST_CACHE_KEY);
+                let data;
+
+                if (cachedData && timeSinceLastFetch < 10000) {
+                    // Use cached data if it's fresh (less than 10 seconds old)
+                    console.log('Using cached lecture data');
+                    data = JSON.parse(cachedData);
+                } else {
+                    console.log('Fetching fresh lecture data');
+                    data = await fetchUserLectures();
+                    // Update cache
+                    sessionStorage.setItem(REQUEST_CACHE_KEY, JSON.stringify(data));
+                }
+
                 setLectures(data);
                 setError(null);
                 setRetryCount(0);
+                lastFetchRef.current = Date.now();
             } catch (err) {
                 console.error('Failed to load lectures:', err);
                 setError('Failed to load your lectures');
@@ -51,6 +96,7 @@ const LectureSelector: React.FC<LectureSelectorProps> = ({
                 }
             } finally {
                 setLoading(false);
+                loadingRef.current = false;
             }
         };
 
@@ -76,9 +122,10 @@ const LectureSelector: React.FC<LectureSelectorProps> = ({
             setNewLectureTitle('');
             setNewLectureDescription('');
             setShowCreateForm(false);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Failed to create lecture:', err);
-            setError(err.response?.data?.message || 'Failed to create lecture. Please try again.');
+            const error = err as ApiError;
+            setError(error.response?.data?.message || 'Failed to create lecture. Please try again.');
         } finally {
             setLoading(false);
         }

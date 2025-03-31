@@ -141,3 +141,57 @@
 .dev-buttons button:hover {
     background-color: #c0392b;
 }
+
+/* Field error styles */
+.field-error {
+    color: #e74c3c;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+input.error {
+    border-color: #e74c3c;
+}
+
+/* Password strength indicator */
+.password-strength {
+    margin-top: 5px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    display: inline-block;
+}
+
+.password-strength.weak {
+    background-color: #ffebee;
+    color: #c62828;
+}
+
+.password-strength.medium {
+    background-color: #fff8e1;
+    color: #ff8f00;
+}
+
+.password-strength.strong {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+}
+
+button.strong-password {
+    background-color: #27ae60;
+}
+
+button.strong-password:hover {
+    background-color: #219653;
+}
+
+/* Account creation success message */
+.success-message {
+    padding: 15px;
+    margin-bottom: 20px;
+    background-color: #e8f5e9;
+    color: #2e7d32;
+    border-radius: 4px;
+    font-size: 14px;
+    text-align: center;
+}

@@ -156,3 +156,41 @@ export const getCurrentUser = async (): Promise<AuthUser> => {
         throw error;
     }
 };
+
+// Request password reset
+export const requestPasswordReset = async (email: string): Promise<{ success: boolean; message: string }> => {
+    try {
+        const response = await axios.post(`${API_URL}/auth/forgot-password`, { email });
+        return response.data;
+    } catch (error) {
+        console.error('Password reset request error:', error);
+        throw error;
+    }
+};
+
+// Reset password with token
+export const resetPassword = async (token: string, password: string): Promise<{ success: boolean; message: string }> => {
+    try {
+        const response = await axios.post(`${API_URL}/auth/reset-password`, { token, password });
+        return response.data;
+    } catch (error) {
+        console.error('Password reset error:', error);
+        throw error;
+    }
+};
+
+// Verify email with token
+export const verifyEmail = async (token: string): Promise<AuthResponse> => {
+    try {
+        const response = await axios.get(`${API_URL}/auth/verify/${token}`);
+
+        if (response.data.success && response.data.token && response.data.user) {
+            saveAuthData(response.data.token, response.data.user);
+        }
+
+        return response.data;
+    } catch (error) {
+        console.error('Email verification error:', error);
+        throw error;
+    }
+};

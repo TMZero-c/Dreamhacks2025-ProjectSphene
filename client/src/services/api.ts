@@ -6,6 +6,15 @@ export const API_URL = process.env.NODE_ENV === 'production'
     ? '/api' // In production, API calls are relative to the same domain
     : 'http://localhost:5000/api'; // In development, use localhost
 
+// For request deduplication
+interface PendingRequest {
+    timestamp: number;
+    promise: Promise<any>;
+}
+
+// Request cache to deduplicate in-flight requests
+const pendingRequests: Record<string, PendingRequest> = {};
+
 // Configure axios
 const api = axios.create({
     baseURL: API_URL,
@@ -47,8 +56,16 @@ api.interceptors.response.use(
             // Mark that we're retrying this request
             originalRequest._retry = true;
 
-            // Wait for a random amount of time (300-800ms) to prevent stampeding
-            const delay = 300 + Math.random() * 500;
+            // More aggressive exponential backoff for 429s
+            const retryCount = originalRequest._retryCount || 0;
+            const delay = Math.min(
+                1000 * Math.pow(2, retryCount) + Math.random() * 1000,
+                10000 // cap at 10 seconds
+            );
+
+            originalRequest._retryCount = retryCount + 1;
+
+            // Wait for the calculated delay
             await new Promise(resolve => setTimeout(resolve, delay));
 
             // Retry the request
@@ -61,22 +78,61 @@ api.interceptors.response.use(
     }
 );
 
+// Utility to deduplicate requests
+function deduplicateRequest<T>(
+    cacheKey: string,
+    requestFn: () => Promise<T>,
+    cacheTime = 500 // Default cache time in ms
+): Promise<T> {
+    const now = Date.now();
+    const existingRequest = pendingRequests[cacheKey];
+
+    // If we have a pending request that's still fresh, use it
+    if (existingRequest && (now - existingRequest.timestamp) < cacheTime) {
+        console.log(`Reusing pending request for ${cacheKey}`);
+        return existingRequest.promise;
+    }
+
+    // Otherwise make a new request
+    const promise = requestFn();
+
+    // Store in pending requests
+    pendingRequests[cacheKey] = {
+        timestamp: now,
+        promise
+    };
+
+    // Clean up after completion
+    promise.finally(() => {
+        // Remove from cache after some time to allow for closely timed duplicate requests
+        setTimeout(() => {
+            if (pendingRequests[cacheKey]?.timestamp === now) {
+                delete pendingRequests[cacheKey];
+            }
+        }, cacheTime + 100);
+    });
+
+    return promise;
+}
+
 // Fetch lectures for a user (created or joined)
 export async function fetchUserLectures(): Promise<Lecture[]> {
-    try {
-        // Add a small random delay to prevent simultaneous requests
-        if (process.env.NODE_ENV === 'development') {
-            await new Promise(resolve => setTimeout(resolve, Math.random() * 100));
+    return deduplicateRequest('user_lectures', async () => {
+        try {
+            // Add a small random delay to prevent simultaneous requests
+            if (process.env.NODE_ENV === 'development') {
+                await new Promise(resolve => setTimeout(resolve, Math.random() * 100));
+            }
+
+            const response = await api.get('/lectures/user');
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching lectures:', error);
+
+            // Return an empty array rather than throwing for this particular method
+            return [];
         }
-
-        const response = await api.get('/lectures/user');
-        return response.data;
-    } catch (error) {
-        console.error('Error fetching lectures:', error);
-
-        // Return an empty array rather than throwing for this particular method
-        return [];
-    }
+    }, 2000); // Cache for 2 seconds
 }
 
 // Create a new lecture
